@@ -2,7 +2,8 @@
 
 int main() {
 	device = read_file("/opt/device");
-	device[strcspn(device, "\n")] = 0;
+	// Remove newline
+	strtok(device, "\n");
 
 	// Filesystems
 	mount("proc", "/proc", "proc", MS_NOSUID, "");
@@ -64,14 +65,13 @@ int main() {
 	strncat(kernel_version, uname_data.version, sizeof(uname_data.version));
 	// Kernel build ID
 	kernel_build_id = read_file("/opt/build_id");
-	kernel_build_id[strcspn(kernel_build_id, "\n")] = 0;
+	strtok(kernel_build_id, "\n");
 	// Kernel Git commit
 	kernel_git_commit = read_file("/opt/commit");
-	kernel_git_commit[strcspn(kernel_git_commit, "\n")] = 0;
+	strtok(kernel_git_commit, "\n");
 	// Setting up boot flags partition (P1)
 	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 	mkdir("/mnt/flags", 0755);
-	umount("/mnt");
 
 	// Handling DISPLAY_DEBUG flag (https://inkbox.ddns.net/wiki/index.php?title=Boot_flags)
 	display_debug = read_file("/mnt/flags/DISPLAY_DEBUG");
@@ -83,11 +83,17 @@ int main() {
 		freopen(serial_fifo_path, "a+", stdout);
 	}
 
+	// USBNET_IP
+	usbnet_ip = read_file("/mnt/flags/USBNET_IP");
+	strtok(usbnet_ip, "\n");
+
 	// Information header
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
 	
 	// Checking filesystems
-	info("Checking filesystems ...", 0);
+	info("Checking filesystems ...", INFO_OK);
+	// Unmounting P1 for inspection by fsck.ext4
+	umount("/mnt");
 	printf("\n");
 	{
 		// P1
@@ -118,6 +124,8 @@ int main() {
 		run_command("/usr/bin/fsck.ext4", arguments, true);
 	}
 	printf("\n");
+	// Remounting P1
+	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 
 	// Universal ID check
 	{
@@ -127,7 +135,9 @@ int main() {
 	// DONT_BOOT
 	dont_boot = read_file("/mnt/flags/DONT_BOOT");
 	if(strcmp(dont_boot, "true\n") == 0 || strcmp(dont_boot, "true") == 0) {
-		info("Device is locked down and will not boot.", 2);
+		info("Device is locked down and will not boot", INFO_FATAL);
+		show_alert_splash(1);
+		exit(EXIT_FAILURE);
 	}
 
 	// ENCRYPT_LOCK
@@ -137,8 +147,9 @@ int main() {
 		unsigned long lock_epoch = strtoul(encrypt_lock, NULL, 0);
 		// Comparing lockdown time limit to current time
 		if(current_epoch < lock_epoch) {
-			info("Too many incorrect encrypted storage unlocking attempts have locked down this device. Shutting down ...", 2);
-			const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", "7", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, true);
+			info("Too many incorrect encrypted storage unlocking attempts have locked down this device. Shutting down ...", INFO_FATAL);
+			// Splash time
+			show_alert_splash(7);
 			sync();
 			exit(EXIT_FAILURE);
 			// rcS will power off the device after this
@@ -152,7 +163,7 @@ int main() {
 	// DFL
 	dfl = read_file("/mnt/flags/DFL");
 	if(strcmp(dfl, "true\n") == 0 || strcmp(dfl, "true") == 0) {
-		info("Entering Direct Firmware Loader mode (DFL) ...", 0);
+		info("Entering Direct Firmware Loader mode (DFL) ...", INFO_OK);
 		// Re-setting flag
 		write_file("/mnt/flags/DFL", "false\n");
 		launch_dfl();
@@ -163,6 +174,96 @@ int main() {
 	if(strcmp(boot_usb_debug, "true\n") == 0 || strcmp(boot_usb_debug, "true") == 0) {
 		setup_usb_debug(true);
 	}
+
+	// INITRD_DEBUG
+	initrd_debug = read_file("/mnt/flags/INITRD_DEBUG");
+	if(strcmp(initrd_debug, "true\n") == 0 || strcmp(initrd_debug, "true") == 0) {
+		setup_usb_debug(false);
+	}
+
+	// Unmounting boot flags partition
+	umount("/mnt");
+
+	// Are we spawning a shell?
+	// https://stackoverflow.com/a/19186027/14164574
+	{
+		char * value;
+		struct timeval tmo;
+		fd_set readfds;
+
+		printf("(initrd) Hit ENTER to stop auto-boot ... ");
+		fflush(stdout);
+
+		// Wait only 3 seconds for user input
+		FD_ZERO(&readfds);
+		FD_SET(0, &readfds);
+		tmo.tv_sec = 3;
+		tmo.tv_usec = 0;
+
+		switch(select(1, &readfds, NULL, NULL, &tmo)) {
+			case -1:
+				break;
+			case 0:
+				printf("\n\n");
+				goto boot;
+		}
+
+		// This is only executed if the Enter key has been pressed
+		setup_shell();
+	}
+
+	boot:;
+	// Checking if the 'root' flag is set
+	{
+		// MMC
+		char root_flag[6];
+		if(strcmp(device, "kt") == 0) {
+			read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR_KT, 512, 6);
+		}
+		else {
+			read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR, 512, 6);
+		}
+		sprintf(root_flag, "%s", &sector_content);
+
+		if(strcmp(root_flag, "rooted") == 0) {
+			root_mmc = true;
+		}
+		else {
+			root_mmc = false;
+		}
+	}
+	{
+		// Init ramdisk
+		char * root_flag = read_file("/opt/root");
+		if(strcmp(root_flag, "rooted\n") == 0 || strcmp(root_flag, "rooted") == 0) {
+			root_initrd = true;
+		}
+		else {
+			root_initrd = false;
+		}
+	}
+
+	if(root_mmc == true && root_initrd == true) {
+		root = true;
+	}
+	else {
+		root = false;
+		if(root_mmc == true || root_initrd == true) {
+			write_file("/mnt/flags/DONT_BOOT", "true\n");
+			info("Security policy was violated! Shutting down ...", INFO_FATAL);
+			show_alert_splash(1);
+			exit(EXIT_FAILURE);
+		}
+	}
+
+	if(root == true) {
+		info("Device is rooted; not enforcing security policy", INFO_WARNING);
+	}
+	else {
+		info("Device is not rooted; enforcing security policy", INFO_OK);
+	}
+
+
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/functions.cpp#L415-L430
@@ -203,22 +304,22 @@ char * read_file(char * file_path) {
 		lSize = ftell(fp);
 		rewind(fp);
 
-		/* Allocate memory for entire content */
+		// Allocate memory for entire content
 		buffer = calloc(1, lSize+1);
 		if(!buffer) fclose(fp);
 
-		/* Copy the file into the buffer */
+		// Copy the file into the buffer
 		if(1 != fread(buffer, lSize, 1, fp)) {
 			fclose(fp);
 		}
 
-		return buffer;
+		return(buffer);
 
 		fclose(fp);
 		free(buffer);
 	}
 	else {
-		return "";
+		return("");
 	}
 }
 
@@ -256,12 +357,12 @@ int load_module(char * module_path, char * params) {
 }
 
 // https://stackoverflow.com/a/49334887/14164574
-int set_if_flags(char * ifname, short flags) {
+int set_if_flags(char * if_name, short flags) {
 	struct ifreq ifr;
 	int res = 0;
 
 	ifr.ifr_flags = flags;
-	strncpy(ifr.ifr_name, ifname, IFNAMSIZ);
+	strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
 
 	if((skfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
 		printf("socket error %s\n", strerror(errno));
@@ -271,26 +372,59 @@ int set_if_flags(char * ifname, short flags) {
 
 	res = ioctl(skfd, SIOCSIFFLAGS, &ifr);
 	if (res < 0) {
-		printf("Interface '%s': Error: SIOCSIFFLAGS failed: %s\n", ifname, strerror(errno));
+		printf("Interface '%s': Error: SIOCSIFFLAGS failed: %s\n", if_name, strerror(errno));
 	}
 	else {
-		printf("Interface '%s': flags set to %04X.\n", ifname, flags);
+		printf("Interface '%s': flags set to %04X.\n", if_name, flags);
 	}
 
 	out:
-		return res;
+	return res;
 }
 
-int set_if_up(char * ifname) {
-    return set_if_flags(ifname, IFF_UP);
+int set_if_up(char * if_name) {
+    return set_if_flags(if_name, IFF_UP);
+}
+
+int set_if_ip_address(char * if_name, char * ip_address) {
+	int fd;
+	struct ifreq ifr;
+	struct sockaddr_in * addr;
+
+	// AF_INET - to define network interface IPv4
+	// Creating soket for it
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+	// AF_INET - to define IPv4 Address type
+	ifr.ifr_addr.sa_family = AF_INET;
+
+	// eth0 - define the ifr_name - port name
+	memcpy(ifr.ifr_name, if_name, IFNAMSIZ - 1);
+
+	// Defining sockaddr_in
+	addr = (struct sockaddr_in*)&ifr.ifr_addr;
+
+	// Convert IP address in correct format to write
+	inet_pton(AF_INET, ip_address, &addr->sin_addr);
+
+	// Setting IP Address using ioctl
+	int res = ioctl(fd, SIOCSIFADDR, &ifr);
+	// Closing file descriptor
+	close(fd);
+
+	// Clear ip_address buffer with 0x20- space
+	memset((unsigned char*)ip_address, 0x20, 15);
+	ioctl(fd, SIOCGIFADDR, &ifr);
+
+	return res;
 }
 
 int info(char * message, int mode) {
 	/*
 	 * Modes:
-	 * - 0: Normal logging (green)
-	 * - 1: Warning logging (yellow)
-	 * - 2: Error logging (red)
+	 * - 0: Normal logging (green) - INFO_OK
+	 * - 1: Warning logging (yellow) - INFO_WARNING
+	 * - 2: Error logging (red) - INFO_FATAL
 	*/
 	if(mode == 0) {
 		printf("\e[1m\e[32m * \e[0m%s\n", message);
@@ -320,13 +454,13 @@ void launch_dfl() {
 		load_module("/modules/drivers/usb/gadget/function/usb_f_mass_storage.ko", "");
 	}
 	if(strcmp(device, "emu") != 0) {
-		load_module("/modules/g_mass_storage.ko", "");
+		load_module("/modules/g_mass_storage.ko", "file=/dev/mmcblk0 removable=y stall=0");
 	}
 
 	// Splash time
 	const char * arguments[] = { "/etc/init.d/inkbox-splash", "dfl", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, true);
 	while(true) {
-		info("This device is in DFL mode. Please reset it to resume normal operation.", 0);
+		info("This device is in DFL mode. Please reset it to resume normal operation.", INFO_OK);
 		sleep(30);
 	}
 }
@@ -344,14 +478,95 @@ void setup_usb_debug(bool boot) {
 	}
 
 	if(boot == true) {
+		// Set up USB networking interface
 		setup_usbnet();
+		// Splash time
 		const char * arguments[] = { "/etc/init.d/inkbox-splash", "usb_debug", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, true);
 		while(true) {
-			info("This device is in boot-time USB debug mode. Please reset or reboot it to resume normal operation.", 0);
+			info("This device is in boot-time USB debug mode. Please reset or reboot it to resume normal operation.", INFO_OK);
 			sleep(30);
 		}
 	}
 }
 
 void setup_usbnet() {
+	// Load modules
+	mkdir("/modules", 0755);
+	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
+
+	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0) {
+		load_module("/modules/arcotg_udc.ko", "");
+	}
+	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0 || strcmp(device, "n236") == 0 || strcmp(device, "n437") == 0) {
+		load_module("/module/g_ether.ko", "");
+	}
+	else if(strcmp(device, "n306") == 0 || strcmp(device, "n873") == 0 || strcmp(device, "bpi") == 0) {
+		load_module("/modules/fs/configfs/configfs.ko", "");
+		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
+		load_module("/modules/drivers/usb/gadget/function/u_ether.ko", "");
+		load_module("/modules/drivers/usb/gadget/function/usb_f_ecm.ko", "");
+		if(file_exists("/modules/drivers/usb/gadget/function/usb_f_eem.ko")) {
+			load_module("/modules/drivers/usb/gadget/function/usb_f_eem.ko", "");
+		}
+		load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
+		load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
+		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", "");
+	}
+	else if(strcmp(device, "kt") == 0) {
+		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/arcotg_udc.ko", "");
+		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/g_ether.ko", "");
+	}
+	else if(strcmp(device, "emu") == 0) {
+		;
+	}
+	else {
+		load_module("/modules/g_ether.ko", "");
+	}
+
+	// Setting up network interface
+	set_if_up("usb0");
+	// Checking for custom IP address
+	if(strcmp(usbnet_ip, "") != 0) {
+		if(set_if_ip_address("usb0", usbnet_ip) != 0) {
+			set_if_ip_address("usb0", "192.168.2.2");
+		}
+	}
+	else {
+		set_if_ip_address("usb0", "192.168.2.2");
+	}
+}
+
+void setup_shell() {
+	// /etc/inittab hackery
+	remove("/usr/sbin/chroot");
+	if(strcmp(device, "emu") == 0) {
+		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyAMA0 115200 linux");
+	}
+	else if(strcmp(device, "bpi") == 0) {
+		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyS0 115200 linux");
+	}
+	else {
+		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttymxc0 115200 linux");
+	}
+	// Setting executable bit
+	chmod("/usr/sbin/chroot", 0777);
+	exit(EXIT_SUCCESS);
+}
+
+void read_sector(char * device_node, unsigned long sector, int sector_size, unsigned long bytes_to_read) {
+	int fd = open(device_node, O_RDONLY);
+	sector = sector * sector_size;
+	lseek(fd, sector, SEEK_SET);
+	read(fd, &sector_content, bytes_to_read);
+	close(fd);
+}
+
+void show_alert_splash(int error_code) {
+	// Converting error code to char
+	char code[sizeof(error_code)];
+	sprintf(code, "%d", error_code);
+
+	const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", code, NULL };
+	run_command("/etc/init.d/inkbox-splash", arguments, true);
+
 }
