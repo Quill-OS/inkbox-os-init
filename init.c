@@ -52,8 +52,6 @@ int main() {
 	// Setting loopack interface UP
 	set_if_up("lo");
 
-	// TODO: Handle DFL mode
-
 	// Getting kernel information
 	// Kernel version
 	struct utsname uname_data;
@@ -71,24 +69,35 @@ int main() {
 	strtok(kernel_git_commit, "\n");
 	// Setting up boot flags partition (P1)
 	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
-	mkdir("/mnt/flags", 0755);
+	mkpath("/mnt/flags", 0755);
 
 	// Handling DISPLAY_DEBUG flag (https://inkbox.ddns.net/wiki/index.php?title=Boot_flags)
 	display_debug = read_file("/mnt/flags/DISPLAY_DEBUG");
 	if(strcmp(display_debug, "true\n") == 0 || strcmp(display_debug, "true") == 0) {
-		mkfifo(serial_fifo_path, 0x29A);
+		mkfifo(SERIAL_FIFO_PATH, 0x29A);
 		const char * arguments[] = { "/etc/init.d/inkbox-splash", "display_debug", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
 		sleep(5);
 		// Redirecting all stdout output to display debug's named pipe
-		freopen(serial_fifo_path, "a+", stdout);
+		freopen(SERIAL_FIFO_PATH, "a+", stdout);
 	}
 
 	// USBNET_IP
 	usbnet_ip = read_file("/mnt/flags/USBNET_IP");
 	strtok(usbnet_ip, "\n");
 
+	// WILL_UPDATE
+	will_update = read_file("/mnt/flags/WILL_UPDATE");
+
+	// MOUNT_RW
+	mount_rw = read_file("/mnt/flags/MOUNT_RW");
+
+	// LOGIN_SHELL
+	login_shell = read_file("/mnt/flags/LOGIN_SHELL");
+	strtok(login_shell, "\n");
+
 	// Information header
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
+	printf("Copyright (C) 2021-2022 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
 	
 	// Checking filesystems
 	info("Checking filesystems ...", INFO_OK);
@@ -160,27 +169,6 @@ int main() {
 		}
 	}
 
-	// DFL
-	dfl = read_file("/mnt/flags/DFL");
-	if(strcmp(dfl, "true\n") == 0 || strcmp(dfl, "true") == 0) {
-		info("Entering Direct Firmware Loader mode (DFL) ...", INFO_OK);
-		// Re-setting flag
-		write_file("/mnt/flags/DFL", "false\n");
-		launch_dfl();
-	}
-
-	// BOOT_USB_DEBUG
-	boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG");
-	if(strcmp(boot_usb_debug, "true\n") == 0 || strcmp(boot_usb_debug, "true") == 0) {
-		setup_usb_debug(true);
-	}
-
-	// INITRD_DEBUG
-	initrd_debug = read_file("/mnt/flags/INITRD_DEBUG");
-	if(strcmp(initrd_debug, "true\n") == 0 || strcmp(initrd_debug, "true") == 0) {
-		setup_usb_debug(false);
-	}
-
 	// Unmounting boot flags partition
 	umount("/mnt");
 
@@ -225,7 +213,7 @@ int main() {
 		}
 		sprintf(root_flag, "%s", &sector_content);
 
-		if(strcmp(root_flag, "rooted") == 0) {
+		if(strstr(root_flag, "rooted") != NULL) {
 			root_mmc = true;
 		}
 		else {
@@ -235,7 +223,7 @@ int main() {
 	{
 		// Init ramdisk
 		char * root_flag = read_file("/opt/root");
-		if(strcmp(root_flag, "rooted\n") == 0 || strcmp(root_flag, "rooted") == 0) {
+		if(strstr(root_flag, "rooted") != NULL) {
 			root_initrd = true;
 		}
 		else {
@@ -249,7 +237,10 @@ int main() {
 	else {
 		root = false;
 		if(root_mmc == true || root_initrd == true) {
+			mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 			write_file("/mnt/flags/DONT_BOOT", "true\n");
+			sync();
+			umount("/mnt");
 			info("Security policy was violated! Shutting down ...", INFO_FATAL);
 			show_alert_splash(1);
 			exit(EXIT_FAILURE);
@@ -263,11 +254,242 @@ int main() {
 		info("Device is not rooted; enforcing security policy", INFO_OK);
 	}
 
+	{
+		// Allow 3 seconds for power button input (boot mode & DFL mode)
+		int fd = open(BUTTON_INPUT_DEVICE, O_RDONLY | O_NONBLOCK);
+		struct input_event ev;
+		time_t monitor_input_start = time(NULL);
+		while(time(NULL) - monitor_input_start <= 3) {
+			if(read(fd, &ev, sizeof(struct input_event)) > 0) {
+				if(ev.code == KEY_POWER) {
+					power_button_pressed = true;
+				}
+				// KEY_KATAKANA represents the brightness button on the Glo (N613)
+				else if(ev.code == KEY_HOME || ev.code == KEY_KATAKANA) {
+					other_button_pressed = true;
+				}
+			}
+		}
+	}
 
+	// DFL mode
+	if(root == true) {
+		dfl = read_file("/mnt/flags/DFL");
+		if((power_button_pressed == true && other_button_pressed == true) || (strcmp(dfl, "true\n") == 0 || strcmp(dfl, "true") == 0)) {
+			info("Entering Direct Firmware Loader mode (DFL) ...", INFO_OK);
+			// Re-setting flag
+			write_file("/mnt/flags/DFL", "false\n");
+			launch_dfl();
+		}
+	}
+
+	// BOOT_USB_DEBUG
+	if(root == true) {
+		boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG");
+		if(strcmp(boot_usb_debug, "true\n") == 0 || strcmp(boot_usb_debug, "true") == 0) {
+			setup_usb_debug(true);
+		}
+	}
+
+	// INITRD_DEBUG
+	if(root == true) {
+		initrd_debug = read_file("/mnt/flags/INITRD_DEBUG");
+		if(strcmp(initrd_debug, "true\n") == 0 || strcmp(initrd_debug, "true") == 0) {
+			setup_usb_debug(false);
+		}
+	}
+
+	// Handling boot mode switching
+	if(power_button_pressed == true) {
+		boot_mode = BOOT_DIAGNOSTICS;
+		info("Power button input detected", INFO_WARNING);
+		info("Boot mode: Diagnostics", INFO_OK);
+	}
+	else {
+		boot_mode = BOOT_STANDARD;
+		info("Boot mode: Standard", INFO_OK);
+	}
+
+	if(boot_mode == BOOT_STANDARD) {
+		// Standard mode
+		// Checking whether we need to show an update splash or not
+		if(!(strcmp(display_debug, "true\n") == 0 || strcmp(display_debug, "true") == 0)) {
+			if(strcmp(will_update, "true\n") == 0 || strcmp(will_update, "true\n") == 0) {
+				const char * arguments[] = { "/etc/init.d/inkbox-splash", "update_splash", NULL }; update_splash_pid = run_command("/etc/init.d/inkbox-splash", arguments, false);
+			}
+			else {
+				{
+					// Showing 'InkBox' splash
+					const char * arguments[] = { "/etc/init.d/inkbox-splash", NULL }; run_command("/etc/init.d/inkbox_splash", arguments, true);
+					sleep(2);
+				}
+				{
+					// Initializing progress bar
+					const char * arguments[] = { "/etc/init.d/inkbox-splash", "progress_bar_init", NULL }; run_command("/etc/init.d/inkbox_splash", arguments, false);
+					sleep(2);
+
+					set_progress(0);
+					progress_sleep();
+					set_progress(5);
+					progress_sleep();
+				}
+			}
+		}
+
+		// Mounting root filesystem
+		if(strcmp(mount_rw, "true\n") == 0 || strcmp(mount_rw, "true") == 0) {
+			// Mount read-write
+			const char * arguments[] = { "/etc/init.d/overlay-mount", "rw", NULL };
+			int exit_code =	run_command("/etc/init.d/overlay-mount", arguments, true);
+			if(exit_code != 0) {
+				exit(exit_code);
+			}
+		}
+		else {
+			// Mount read-only (default)
+			const char * arguments[] = { "/etc/init.d/overlay-mount", "ro", NULL };
+			int exit_code = run_command("/etc/init.d/overlay-mount", arguments, true);
+			if(exit_code != 0) {
+				exit(exit_code);
+			}
+		}
+
+		info("Mounted root filesystem", INFO_OK);
+		set_progress(15);
+		progress_sleep();
+
+		// Mounting P1 in root filesystem
+		mount("/dev/mmcblk0p1", "/mnt/boot", "ext4", 0, "");
+		mount("tmpfs", "/mnt/root", "tmpfs", 0, "size=8M");
+
+		// Handling LOGIN_SHELL
+		if(root == true) {
+			if(strcmp(login_shell, "bash") == 0) {
+				{
+					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/bin/bash#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}
+				{
+					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/bin/bash#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}
+			}
+			else if(strcmp(login_shell, "zsh") == 0) {
+				{
+					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}				{
+					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}
+			}
+			else if(strcmp(login_shell, "fish") == 0) {
+				{
+					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/usr/bin/fish#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}
+				{
+					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/usr/bin/fish#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
+				}
+				mkpath("/mnt/root/.config", 0755);
+				mkpath("/mnt/root/.config/fish", 0755);
+				write_file("/mnt/root/.config/fish/fish_variables", "# This file contains fish universal variable definitions.\n# VERSION: 3.0\nSETUVAR __fish_init_2_3_0:\\x1d\nSETUVAR __fish_init_3_x:\\x1d\nSETUVAR --export fish_user_paths:/usr/local/bin");
+			}
+			else {
+				if(strcmp(login_shell, "") != 0 && strcmp(login_shell, "ash") != 0) {
+					char * message;
+					strtok(login_shell, "\n");
+					sprintf(message, "'%s' is not a valid login shell; falling back to default", login_shell);
+					info(message, INFO_WARNING);
+				}
+			}
+		}
+
+		// passwd file
+		// Bind-mounting directly from initrd filesystem does not seem to work; copying file to temporary filesystem
+		copy_file("/opt/passwd_root", "/tmp/passwd");
+		mount("/tmp/passwd", "/mnt/etc/passwd", "", MS_BIND, "");
+
+		// User storage
+		mount("/dev/mmcblk0p4", "/mnt/opt/storage", "ext4", 0, "");
+		// Configuration files
+		mkpath("/mnt/opt/storage/config", 0755);
+		mount("/mnt/opt/storage/config", "/mnt/opt/config", "", MS_BIND, "");
+		// GUI bundle
+		mkpath("/mnt/opt/storage/update", 0755);
+		mount("/mnt/opt/storage/update", "/mnt/update", "", MS_BIND, "");
+		// X11/KoBox
+		mkpath("/mnt/opt/storage/X11/rootfs/work", 0755);
+		mkpath("/mnt/opt/storage/X11/rootfs/write", 0755);
+		mount("/mnt/opt/storage/X11/rootfs", "/mnt/opt/X11/rootfs", "", MS_BIND, "");
+		set_progress(30);
+		progress_sleep();
+		// GUI root filesystem
+		mkpath("/mnt/opt/storage/gui_rootfs", 0755);
+		mount("/mnt/opt/storage/gui_rootfs", "/mnt/opt/gui_rootfs", "", MS_BIND, "");
+		// SSHd
+		mkpath("/mnt/opt/storage/ssh", 0755);
+		mount("/mnt/opt/storage/ssh", "/mnt/etc/ssh", "", MS_BIND, "");
+		write_file("/mnt/opt/storage/ssh/sshd_config", "");
+		write_file("/tmp/sshd_config", "PermitRootLogin yes\nSubsystem sftp internal-sftp\n# If sshfs doesn't work, first enable read-write support, then begin a connection with sshfs");
+		mount("/tmp/sshd_config", "/mnt/etc/ssh/sshd_config", "", MS_BIND, "");
+		set_progress(40);
+		progress_sleep();
+
+		// SquashFS archives
+		// Userspace 'root' flag
+		if(root == true) {
+			const char * arguments[] = { "/sbin/losetup", "/dev/loop7", "/opt/root.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+			mount("/dev/loop7", "/mnt/opt/root", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+		}
+		// Public key
+		{
+			const char * arguments[] = { "/sbin/losetup", "/dev/loop6", "/opt/key.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+			mount("/dev/loop6", "/mnt/opt/key", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+		}
+		// Modules
+		{
+			const char * arguments[] = { "/sbin/losetup", "/dev/loop5", "/opt/modules.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+			mount("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+		}
+		info("Mounted core SquashFS archives", INFO_OK);
+
+		// Essential filesystems
+		// proc
+		mount("/proc", "/mnt/proc", "", MS_BIND | MS_REC, "");
+		// sys
+		mount("/sys", "/mnt/sys", "", MS_BIND | MS_REC, "");
+		// dev
+		mount("/dev", "/mnt/dev", "", MS_BIND | MS_REC, "");
+		// tmp
+		mount("tmpfs", "/mnt/tmp", "tmpfs", 0, "size=16M");
+		// log
+		mount("tmpfs", "/mnt/var/log", "tmpfs", 0, "size=8M");
+		// developer
+		if(root == true) {
+			mount("tmpfs", "/mnt/opt/developer", "tmpfs", 0, "size=128K");
+		}
+		info("Mounted essential filesystems", INFO_OK);
+		set_progress(45);
+		progress_sleep();
+
+		// Wi-Fi
+		// Firmware
+		if(file_exists("/opt/firmware.sqsh") == true) {
+			const char * arguments[] = { "/sbin/losetup", "/dev/loop4", "/opt/firmware.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+			mount("/dev/loop4", "/mnt/lib/firmware", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+		}
+		// resolv.conf
+		write_file("/tmp/resolv.conf", "");
+		mount("/tmp/resolv.conf", "/mnt/etc/resolv.conf", "", MS_BIND, "");
+		// DHCPcd
+		mount("tmpfs", "/mnt/var/db/dhcpcd", "tmpfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "size=512K");
+		write_file("/mnt/var/db/dhcpcd/duid", "");
+		write_file("/mnt/opt/storage/dhcpcd_duid", "");
+		mount("/mnt/opt/storage/dhcpcd_duid", "/mnt/var/db/dhcpcd/duid", "", MS_BIND, "");
+	}
+	else {
+		// Diagnostics mode
+	}
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/functions.cpp#L415-L430
-bool run_command(const char * path, const char * arguments[], bool wait) {
+int run_command(const char * path, const char * arguments[], bool wait) {
 	int status = -1;
 	int pid = 0;
 
@@ -278,10 +500,12 @@ bool run_command(const char * path, const char * arguments[], bool wait) {
 	}
 	
 	if(wait == true) {
-		waitpid(pid, 0, 0);
+		int exit_code = 0;
+		waitpid(pid, &exit_code, 0);
+		return exit_code;
 	}
-
-	return true;
+	
+	return pid;
 }
 
 // https://stackoverflow.com/a/230070/14164574
@@ -313,9 +537,9 @@ char * read_file(char * file_path) {
 			fclose(fp);
 		}
 
+		fclose(fp);
 		return(buffer);
 
-		fclose(fp);
 		free(buffer);
 	}
 	else {
@@ -325,7 +549,7 @@ char * read_file(char * file_path) {
 
 // https://stackoverflow.com/a/14576624/14164574
 bool write_file(char * file_path, char * content) {
-	FILE *file = fopen(file_path, "w");
+	FILE *file = fopen(file_path, "wb");
 
 	int rc = fputs(content, file);
 	if (rc == EOF) {
@@ -334,6 +558,49 @@ bool write_file(char * file_path, char * content) {
 	else {
 		fclose(file);
 	}
+}
+
+// https://stackoverflow.com/a/39191360/14164574
+bool copy_file(char * source_file, char * destination_file) {
+	FILE *fp_I;
+	FILE *fp_O;
+
+	fp_I = fopen(source_file, "rb");
+	if(!fp_I) {
+		perror(source_file);
+		return false;
+	}
+
+	fp_O = fopen(destination_file, "wb");
+	if(!fp_O) {
+		fclose(fp_I);
+		return false;
+	}
+
+	int c;
+	while((c = getc(fp_I)) != EOF) {
+		putc(c, fp_O);
+	}
+
+	fclose(fp_I);
+	if(fclose(fp_O) != 0) {
+		return false;
+	}
+	return true;
+}
+
+bool mkpath(char * path, mode_t mode) {
+	if(!path) {
+		errno = EINVAL;
+		return 1;
+	}
+
+	if(strlen(path) == 1 && path[0] == '/')
+		return 0;
+
+	mkpath(dirname(strdupa(path)), mode);
+
+	return mkdir(path, mode);
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/wifi.cpp#L181-L197
@@ -386,6 +653,7 @@ int set_if_up(char * if_name) {
     return set_if_flags(if_name, IFF_UP);
 }
 
+// https://www.includehelp.com/c-programs/set-ip-address-in-linux.aspx
 int set_if_ip_address(char * if_name, char * ip_address) {
 	int fd;
 	struct ifreq ifr;
@@ -443,7 +711,7 @@ int info(char * message, int mode) {
 
 void launch_dfl() {
 	// Loading USB Mass Storage (USBMS) modules
-	mkdir("/modules", 0755);
+	mkpath("/modules", 0755);
 	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
 	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0) {
 		load_module("/modules/arcotg_udc.ko", "");
@@ -466,7 +734,7 @@ void launch_dfl() {
 }
 
 void setup_usb_debug(bool boot) {
-	mkdir("/dev/pts", 0755);
+	mkpath("/dev/pts", 0755);
 	mount("devpts", "/dev/pts", "devpts", 0, "");
 	{
 		// Telnet server
@@ -491,7 +759,7 @@ void setup_usb_debug(bool boot) {
 
 void setup_usbnet() {
 	// Load modules
-	mkdir("/modules", 0755);
+	mkpath("/modules", 0755);
 	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
 
 	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0) {
@@ -563,10 +831,23 @@ void read_sector(char * device_node, unsigned long sector, int sector_size, unsi
 
 void show_alert_splash(int error_code) {
 	// Converting error code to char
-	char code[sizeof(error_code)];
+	char code[10];
 	sprintf(code, "%d", error_code);
 
+	// Showing alert splash
 	const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", code, NULL };
 	run_command("/etc/init.d/inkbox-splash", arguments, true);
+}
 
+void set_progress(int progress_value) {
+	// Converting progress value to char
+	char progress[3];
+	sprintf(progress, "%d", progress_value);
+
+	// Sending progress value to named pipe
+	write_file(PROGRESS_BAR_FIFO_PATH, progress);
+}
+
+void progress_sleep() {
+	usleep(500);
 }
