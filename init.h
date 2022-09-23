@@ -62,6 +62,8 @@ char * will_update;
 int update_splash_pid;
 char * mount_rw;
 char * login_shell;
+char * developer_key;
+char * x11_start;
 
 // Functions
 int run_command(const char * path, const char * arguments[], bool wait);

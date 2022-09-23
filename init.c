@@ -2,8 +2,6 @@
 
 int main() {
 	device = read_file("/opt/device");
-	// Remove newline
-	strtok(device, "\n");
 
 	// Filesystems
 	mount("proc", "/proc", "proc", MS_NOSUID, "");
@@ -13,7 +11,7 @@ int main() {
 	mount("tmpfs", "/tmp", "tmpfs", 0, "size=16M");
 
 	// Framebuffer (Kindle Touch-specific)
-	if(strcmp(device, "kt") == 0) {
+	if(strstr(device, "kt")) {
 		// Unsquashing modules
 		{
 			const char * arguments[] = { "/bin/unsquashfs", "-d", "/lib/modules", "/opt/modules.sqsh", NULL }; run_command("/bin/unsquashfs", arguments, true);
@@ -63,17 +61,15 @@ int main() {
 	strncat(kernel_version, uname_data.version, sizeof(uname_data.version));
 	// Kernel build ID
 	kernel_build_id = read_file("/opt/build_id");
-	strtok(kernel_build_id, "\n");
 	// Kernel Git commit
 	kernel_git_commit = read_file("/opt/commit");
-	strtok(kernel_git_commit, "\n");
 	// Setting up boot flags partition (P1)
 	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 	mkpath("/mnt/flags", 0755);
 
 	// Handling DISPLAY_DEBUG flag (https://inkbox.ddns.net/wiki/index.php?title=Boot_flags)
 	display_debug = read_file("/mnt/flags/DISPLAY_DEBUG");
-	if(strcmp(display_debug, "true\n") == 0 || strcmp(display_debug, "true") == 0) {
+	if(strstr(display_debug, "true")) {
 		mkfifo(SERIAL_FIFO_PATH, 0x29A);
 		const char * arguments[] = { "/etc/init.d/inkbox-splash", "display_debug", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
 		sleep(5);
@@ -83,22 +79,23 @@ int main() {
 
 	// USBNET_IP
 	usbnet_ip = read_file("/mnt/flags/USBNET_IP");
-	strtok(usbnet_ip, "\n");
 
 	// WILL_UPDATE
 	will_update = read_file("/mnt/flags/WILL_UPDATE");
-
+	
 	// MOUNT_RW
 	mount_rw = read_file("/mnt/flags/MOUNT_RW");
 
 	// LOGIN_SHELL
 	login_shell = read_file("/mnt/flags/LOGIN_SHELL");
-	strtok(login_shell, "\n");
+
+	// X11_START
+	x11_start = read_file("/mnt/flags/X11_START");
 
 	// Information header
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
 	printf("Copyright (C) 2021-2022 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
-	
+
 	// Checking filesystems
 	info("Checking filesystems ...", INFO_OK);
 	// Unmounting P1 for inspection by fsck.ext4
@@ -113,7 +110,7 @@ int main() {
 		// P2
 		const char * arguments[] = { };
 		arguments[0] = "/usr/bin/fsck.ext4", arguments[1] = "-y";
-		if(strcmp(device, "n873") == 0) {
+		if(strstr(device, "n873")) {
 			arguments[2] = "/dev/mmcblk0p5";
 		}
 		else {
@@ -143,7 +140,7 @@ int main() {
 
 	// DONT_BOOT
 	dont_boot = read_file("/mnt/flags/DONT_BOOT");
-	if(strcmp(dont_boot, "true\n") == 0 || strcmp(dont_boot, "true") == 0) {
+	if(strstr(dont_boot, "true")) {
 		info("Device is locked down and will not boot", INFO_FATAL);
 		show_alert_splash(1);
 		exit(EXIT_FAILURE);
@@ -205,7 +202,7 @@ int main() {
 	{
 		// MMC
 		char root_flag[6];
-		if(strcmp(device, "kt") == 0) {
+		if(strstr(device, "kt")) {
 			read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR_KT, 512, 6);
 		}
 		else {
@@ -213,7 +210,7 @@ int main() {
 		}
 		sprintf(root_flag, "%s", &sector_content);
 
-		if(strstr(root_flag, "rooted") != NULL) {
+		if(strstr(root_flag, "rooted")) {
 			root_mmc = true;
 		}
 		else {
@@ -223,7 +220,7 @@ int main() {
 	{
 		// Init ramdisk
 		char * root_flag = read_file("/opt/root");
-		if(strstr(root_flag, "rooted") != NULL) {
+		if(strstr(root_flag, "rooted")) {
 			root_initrd = true;
 		}
 		else {
@@ -275,7 +272,7 @@ int main() {
 	// DFL mode
 	if(root == true) {
 		dfl = read_file("/mnt/flags/DFL");
-		if((power_button_pressed == true && other_button_pressed == true) || (strcmp(dfl, "true\n") == 0 || strcmp(dfl, "true") == 0)) {
+		if((power_button_pressed == true && other_button_pressed == true) || (strstr(dfl, "true"))) {
 			info("Entering Direct Firmware Loader mode (DFL) ...", INFO_OK);
 			// Re-setting flag
 			write_file("/mnt/flags/DFL", "false\n");
@@ -286,7 +283,8 @@ int main() {
 	// BOOT_USB_DEBUG
 	if(root == true) {
 		boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG");
-		if(strcmp(boot_usb_debug, "true\n") == 0 || strcmp(boot_usb_debug, "true") == 0) {
+		if(strstr(boot_usb_debug, "true")) {
+			info("Starting init ramdisk boot USB debug framework", INFO_OK);
 			setup_usb_debug(true);
 		}
 	}
@@ -294,7 +292,8 @@ int main() {
 	// INITRD_DEBUG
 	if(root == true) {
 		initrd_debug = read_file("/mnt/flags/INITRD_DEBUG");
-		if(strcmp(initrd_debug, "true\n") == 0 || strcmp(initrd_debug, "true") == 0) {
+		if(strstr(initrd_debug, "true")) {
+			info("Starting init ramdisk USB debug framework", INFO_OK);
 			setup_usb_debug(false);
 		}
 	}
@@ -313,8 +312,8 @@ int main() {
 	if(boot_mode == BOOT_STANDARD) {
 		// Standard mode
 		// Checking whether we need to show an update splash or not
-		if(!(strcmp(display_debug, "true\n") == 0 || strcmp(display_debug, "true") == 0)) {
-			if(strcmp(will_update, "true\n") == 0 || strcmp(will_update, "true\n") == 0) {
+		if(!(strstr(display_debug, "true"))) {
+			if(strstr(will_update, "true")) {
 				const char * arguments[] = { "/etc/init.d/inkbox-splash", "update_splash", NULL }; update_splash_pid = run_command("/etc/init.d/inkbox-splash", arguments, false);
 			}
 			else {
@@ -337,7 +336,7 @@ int main() {
 		}
 
 		// Mounting root filesystem
-		if(strcmp(mount_rw, "true\n") == 0 || strcmp(mount_rw, "true") == 0) {
+		if(strstr(mount_rw, "true")) {
 			// Mount read-write
 			const char * arguments[] = { "/etc/init.d/overlay-mount", "rw", NULL };
 			int exit_code =	run_command("/etc/init.d/overlay-mount", arguments, true);
@@ -364,7 +363,7 @@ int main() {
 
 		// Handling LOGIN_SHELL
 		if(root == true) {
-			if(strcmp(login_shell, "bash") == 0) {
+			if(strstr(login_shell, "bash")) {
 				{
 					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/bin/bash#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}
@@ -372,14 +371,14 @@ int main() {
 					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/bin/bash#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}
 			}
-			else if(strcmp(login_shell, "zsh") == 0) {
+			else if(strstr(login_shell, "zsh")) {
 				{
 					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}				{
 					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}
 			}
-			else if(strcmp(login_shell, "fish") == 0) {
+			else if(strstr(login_shell, "fish")) {
 				{
 					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/usr/bin/fish#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}
@@ -391,9 +390,8 @@ int main() {
 				write_file("/mnt/root/.config/fish/fish_variables", "# This file contains fish universal variable definitions.\n# VERSION: 3.0\nSETUVAR __fish_init_2_3_0:\\x1d\nSETUVAR __fish_init_3_x:\\x1d\nSETUVAR --export fish_user_paths:/usr/local/bin");
 			}
 			else {
-				if(strcmp(login_shell, "") != 0 && strcmp(login_shell, "ash") != 0) {
+				if(!(strstr(login_shell, "")) && !(strstr(login_shell, "ash"))) {
 					char * message;
-					strtok(login_shell, "\n");
 					sprintf(message, "'%s' is not a valid login shell; falling back to default", login_shell);
 					info(message, INFO_WARNING);
 				}
@@ -412,7 +410,7 @@ int main() {
 		mount("/mnt/opt/storage/config", "/mnt/opt/config", "", MS_BIND, "");
 		// GUI bundle
 		mkpath("/mnt/opt/storage/update", 0755);
-		mount("/mnt/opt/storage/update", "/mnt/update", "", MS_BIND, "");
+		mount("/mnt/opt/storage/update", "/mnt/opt/update", "", MS_BIND, "");
 		// X11/KoBox
 		mkpath("/mnt/opt/storage/X11/rootfs/work", 0755);
 		mkpath("/mnt/opt/storage/X11/rootfs/write", 0755);
@@ -426,7 +424,7 @@ int main() {
 		mkpath("/mnt/opt/storage/ssh", 0755);
 		mount("/mnt/opt/storage/ssh", "/mnt/etc/ssh", "", MS_BIND, "");
 		write_file("/mnt/opt/storage/ssh/sshd_config", "");
-		write_file("/tmp/sshd_config", "PermitRootLogin yes\nSubsystem sftp internal-sftp\n# If sshfs doesn't work, first enable read-write support, then begin a connection with sshfs");
+		write_file("/tmp/sshd_config", "PermitRootLogin yes\nSubsystem sftp internal-sftp\n# If sshfs doesn't work, first enable read-write support, then begin a connection with sshfs\n");
 		mount("/tmp/sshd_config", "/mnt/etc/ssh/sshd_config", "", MS_BIND, "");
 		set_progress(40);
 		progress_sleep();
@@ -482,6 +480,43 @@ int main() {
 		write_file("/mnt/var/db/dhcpcd/duid", "");
 		write_file("/mnt/opt/storage/dhcpcd_duid", "");
 		mount("/mnt/opt/storage/dhcpcd_duid", "/mnt/var/db/dhcpcd/duid", "", MS_BIND, "");
+
+		// Developer key
+		{
+			{
+
+				const char * arguments[] = { "/etc/init.d/developer-key", NULL }; run_command("/etc/init.d/developer-key", arguments, true);
+			}
+			developer_key = read_file("/mnt/opt/developer/key/valid-key");
+			// 'Developer mode' splash
+			if(strstr(developer_key, "true") && strstr(will_update, "true")) {
+				const char * arguments[] = { "/etc/init.d/inkbox-splash", "developer_splash", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
+			}
+		}
+
+		// X11
+		write_file("/mnt/boot/flags/X11_STARTED", "false\n");
+		set_progress(50);
+		progress_sleep();
+
+		if(strstr(x11_start, "true")) {
+			const char * arguments[] = { "/etc/init.d/startx", NULL }; run_command("/etc/init.d/startx", arguments, true);
+		}
+		set_progress(90);
+		progress_sleep();
+
+		{
+			{
+				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "sysinit", NULL }; run_command("/bin/busybox", arguments, true);
+			}
+			set_progress(100);
+			{
+				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "boot", NULL }; run_command("/bin/busybox", arguments, true);
+			}
+			{
+				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "default", NULL }; run_command("/bin/busybox", arguments, true);
+			}
+		}
 	}
 	else {
 		// Diagnostics mode
@@ -498,13 +533,13 @@ int run_command(const char * path, const char * arguments[], bool wait) {
 		fprintf(stderr, "Error in spawning process %s\n", path);
 		return false;
 	}
-	
+
 	if(wait == true) {
 		int exit_code = 0;
 		waitpid(pid, &exit_code, 0);
 		return exit_code;
 	}
-	
+
 	return pid;
 }
 
@@ -525,7 +560,8 @@ char * read_file(char * file_path) {
 		fp = fopen(file_path , "rb");
 
 		fseek(fp, 0L , SEEK_END);
-		lSize = ftell(fp);
+		// Remove trailing newline
+		lSize = ftell(fp) - 1;
 		rewind(fp);
 
 		// Allocate memory for entire content
@@ -538,8 +574,6 @@ char * read_file(char * file_path) {
 		}
 
 		fclose(fp);
-		return(buffer);
-
 		free(buffer);
 	}
 	else {
@@ -713,15 +747,15 @@ void launch_dfl() {
 	// Loading USB Mass Storage (USBMS) modules
 	mkpath("/modules", 0755);
 	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
-	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0) {
+	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
-	if(strcmp(device, "n306") == 0 || strcmp(device, "n873") == 0) {
+	if(strstr(device, "n306") || strstr(device, "n873")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/usb_f_mass_storage.ko", "");
 	}
-	if(strcmp(device, "emu") != 0) {
+	if(strstr(device, "emu")) {
 		load_module("/modules/g_mass_storage.ko", "file=/dev/mmcblk0 removable=y stall=0");
 	}
 
@@ -762,13 +796,13 @@ void setup_usbnet() {
 	mkpath("/modules", 0755);
 	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
 
-	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0) {
+	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
-	if(strcmp(device, "n705") == 0 || strcmp(device, "n905b") == 0 || strcmp(device, "n905c") == 0 || strcmp(device, "n613") == 0 || strcmp(device, "n236") == 0 || strcmp(device, "n437") == 0) {
+	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613") || strstr(device, "n236") || strstr(device, "n437")) {
 		load_module("/module/g_ether.ko", "");
 	}
-	else if(strcmp(device, "n306") == 0 || strcmp(device, "n873") == 0 || strcmp(device, "bpi") == 0) {
+	else if(strstr(device, "n306") || strstr(device, "n873") || strstr(device, "bpi")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/u_ether.ko", "");
@@ -780,11 +814,11 @@ void setup_usbnet() {
 		load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
 		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", "");
 	}
-	else if(strcmp(device, "kt") == 0) {
+	else if(strstr(device, "kt")) {
 		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/arcotg_udc.ko", "");
 		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/g_ether.ko", "");
 	}
-	else if(strcmp(device, "emu") == 0) {
+	else if(strstr(device, "emu")) {
 		;
 	}
 	else {
@@ -794,7 +828,7 @@ void setup_usbnet() {
 	// Setting up network interface
 	set_if_up("usb0");
 	// Checking for custom IP address
-	if(strcmp(usbnet_ip, "") != 0) {
+	if(!(strstr(usbnet_ip, ""))) {
 		if(set_if_ip_address("usb0", usbnet_ip) != 0) {
 			set_if_ip_address("usb0", "192.168.2.2");
 		}
@@ -807,10 +841,10 @@ void setup_usbnet() {
 void setup_shell() {
 	// /etc/inittab hackery
 	remove("/usr/sbin/chroot");
-	if(strcmp(device, "emu") == 0) {
+	if(strstr(device, "emu")) {
 		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyAMA0 115200 linux");
 	}
-	else if(strcmp(device, "bpi") == 0) {
+	else if(strstr(device, "bpi")) {
 		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyS0 115200 linux");
 	}
 	else {
