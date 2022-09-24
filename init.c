@@ -1,7 +1,7 @@
 #include "init.h"
 
 int main() {
-	device = read_file("/opt/device");
+	device = read_file("/opt/device", true);
 
 	// Filesystems
 	mount("proc", "/proc", "proc", MS_NOSUID, "");
@@ -60,15 +60,15 @@ int main() {
 	strncat(kernel_version, space, sizeof(space));
 	strncat(kernel_version, uname_data.version, sizeof(uname_data.version));
 	// Kernel build ID
-	kernel_build_id = read_file("/opt/build_id");
+	kernel_build_id = read_file("/opt/build_id", true);
 	// Kernel Git commit
-	kernel_git_commit = read_file("/opt/commit");
+	kernel_git_commit = read_file("/opt/commit", true);
 	// Setting up boot flags partition (P1)
 	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 	mkpath("/mnt/flags", 0755);
 
 	// Handling DISPLAY_DEBUG flag (https://inkbox.ddns.net/wiki/index.php?title=Boot_flags)
-	display_debug = read_file("/mnt/flags/DISPLAY_DEBUG");
+	display_debug = read_file("/mnt/flags/DISPLAY_DEBUG", true);
 	if(strstr(display_debug, "true")) {
 		mkfifo(SERIAL_FIFO_PATH, 0x29A);
 		const char * arguments[] = { "/etc/init.d/inkbox-splash", "display_debug", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
@@ -78,19 +78,19 @@ int main() {
 	}
 
 	// USBNET_IP
-	usbnet_ip = read_file("/mnt/flags/USBNET_IP");
+	usbnet_ip = read_file("/mnt/flags/USBNET_IP", true);
 
 	// WILL_UPDATE
-	will_update = read_file("/mnt/flags/WILL_UPDATE");
+	will_update = read_file("/mnt/flags/WILL_UPDATE", true);
 	
 	// MOUNT_RW
-	mount_rw = read_file("/mnt/flags/MOUNT_RW");
+	mount_rw = read_file("/mnt/flags/MOUNT_RW", true);
 
 	// LOGIN_SHELL
-	login_shell = read_file("/mnt/flags/LOGIN_SHELL");
+	login_shell = read_file("/mnt/flags/LOGIN_SHELL", true);
 
 	// X11_START
-	x11_start = read_file("/mnt/flags/X11_START");
+	x11_start = read_file("/mnt/flags/X11_START", true);
 
 	// Information header
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
@@ -139,15 +139,15 @@ int main() {
 	}
 
 	// DONT_BOOT
-	dont_boot = read_file("/mnt/flags/DONT_BOOT");
+	dont_boot = read_file("/mnt/flags/DONT_BOOT", true);
 	if(strstr(dont_boot, "true")) {
 		info("Device is locked down and will not boot", INFO_FATAL);
-		show_alert_splash(1);
+		show_alert_splash(1, false);
 		exit(EXIT_FAILURE);
 	}
 
 	// ENCRYPT_LOCK
-	encrypt_lock = read_file("/mnt/flags/ENCRYPT_LOCK");
+	encrypt_lock = read_file("/mnt/flags/ENCRYPT_LOCK", true);
 	if(encrypt_lock[0] != '\0') {
 		unsigned long current_epoch = time(NULL);
 		unsigned long lock_epoch = strtoul(encrypt_lock, NULL, 0);
@@ -155,7 +155,7 @@ int main() {
 		if(current_epoch < lock_epoch) {
 			info("Too many incorrect encrypted storage unlocking attempts have locked down this device. Shutting down ...", INFO_FATAL);
 			// Splash time
-			show_alert_splash(7);
+			show_alert_splash(7, false);
 			sync();
 			exit(EXIT_FAILURE);
 			// rcS will power off the device after this
@@ -219,7 +219,7 @@ int main() {
 	}
 	{
 		// Init ramdisk
-		char * root_flag = read_file("/opt/root");
+		char * root_flag = read_file("/opt/root", true);
 		if(strstr(root_flag, "rooted")) {
 			root_initrd = true;
 		}
@@ -239,7 +239,7 @@ int main() {
 			sync();
 			umount("/mnt");
 			info("Security policy was violated! Shutting down ...", INFO_FATAL);
-			show_alert_splash(1);
+			show_alert_splash(1, false);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -269,9 +269,12 @@ int main() {
 		}
 	}
 
+	// Mounting boot flags partition
+	mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
+
 	// DFL mode
 	if(root == true) {
-		dfl = read_file("/mnt/flags/DFL");
+		dfl = read_file("/mnt/flags/DFL", true);
 		if((power_button_pressed == true && other_button_pressed == true) || (strstr(dfl, "true"))) {
 			info("Entering Direct Firmware Loader mode (DFL) ...", INFO_OK);
 			// Re-setting flag
@@ -282,7 +285,7 @@ int main() {
 
 	// BOOT_USB_DEBUG
 	if(root == true) {
-		boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG");
+		boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG", true);
 		if(strstr(boot_usb_debug, "true")) {
 			info("Starting init ramdisk boot USB debug framework", INFO_OK);
 			setup_usb_debug(true);
@@ -291,12 +294,15 @@ int main() {
 
 	// INITRD_DEBUG
 	if(root == true) {
-		initrd_debug = read_file("/mnt/flags/INITRD_DEBUG");
+		initrd_debug = read_file("/mnt/flags/INITRD_DEBUG", true);
 		if(strstr(initrd_debug, "true")) {
 			info("Starting init ramdisk USB debug framework", INFO_OK);
 			setup_usb_debug(false);
 		}
 	}
+
+	// Unmounting boot flags partition
+	umount("/mnt");
 
 	// Handling boot mode switching
 	if(power_button_pressed == true) {
@@ -319,12 +325,12 @@ int main() {
 			else {
 				{
 					// Showing 'InkBox' splash
-					const char * arguments[] = { "/etc/init.d/inkbox-splash", NULL }; run_command("/etc/init.d/inkbox_splash", arguments, true);
+					const char * arguments[] = { "/etc/init.d/inkbox-splash", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, true);
 					sleep(2);
 				}
 				{
 					// Initializing progress bar
-					const char * arguments[] = { "/etc/init.d/inkbox-splash", "progress_bar_init", NULL }; run_command("/etc/init.d/inkbox_splash", arguments, false);
+					const char * arguments[] = { "/etc/init.d/inkbox-splash", "progress_bar_init", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
 					sleep(2);
 
 					set_progress(0);
@@ -484,15 +490,38 @@ int main() {
 		// Developer key
 		{
 			{
-
 				const char * arguments[] = { "/etc/init.d/developer-key", NULL }; run_command("/etc/init.d/developer-key", arguments, true);
 			}
-			developer_key = read_file("/mnt/opt/developer/key/valid-key");
+			developer_key = read_file("/mnt/opt/developer/key/valid-key", true);
 			// 'Developer mode' splash
 			if(strstr(developer_key, "true") && strstr(will_update, "true")) {
 				const char * arguments[] = { "/etc/init.d/inkbox-splash", "developer_splash", NULL }; run_command("/etc/init.d/inkbox-splash", arguments, false);
 			}
 		}
+
+		// GUI root filesystem
+		{
+			// Validating digital signature
+			const char * arguments[] = { "/usr/bin/openssl", "dgst", "-sha256", "-verify", "/mnt/opt/key/public.pem", "-signature", "/mnt/opt/storage/gui_rootfs.isa.dgst", "/mnt/opt/storage/gui_rootfs.isa", NULL };
+			if(!run_command("/usr/bin/openssl", arguments, true) && !strstr(developer_key, "true")) {
+				info("GUI root filesystem's digital signature is invalid!", INFO_FATAL);
+				info("Aborting boot and powering off", INFO_FATAL);
+				kill_process("inkbox-splash", SIGTERM);
+				show_alert_splash(2, true);
+			}
+			else {
+				// Mounting GUI root filesystem
+				{
+					const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/bin/squashfuse", "/opt/storage/gui_rootfs.isa", "/opt/gui_rootfs/read", NULL }; run_command("/bin/busybox", arguments, true);
+				}
+				// Setting up GUI root filesystem overlay
+				{
+					const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/usr/local/bin/unionfs", "-o", "cow,nonempty", "/opt/gui_rootfs/write=RW:/opt/gui_rootfs/read=RO", "/kobo", NULL }; run_command("/bin/busybox", arguments, true);
+				}
+				write_file("/mnt/kobo/inkbox/remount", "true");
+			}
+		}
+
 
 		// X11
 		write_file("/mnt/boot/flags/X11_STARTED", "false\n");
@@ -505,14 +534,27 @@ int main() {
 		set_progress(90);
 		progress_sleep();
 
+		// Starting OpenRC & friends
 		{
+			// OpenRC sysinit
 			{
 				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "sysinit", NULL }; run_command("/bin/busybox", arguments, true);
 			}
+
 			set_progress(100);
+			usleep(500);
+			write_file("/run/progress_bar_fifo", "stop\n");
+
+			// Init ramdisk named pipe
+			{
+				const char * arguments[] = { "/etc/init.d/initrd-fifo", NULL }; run_command("/etc/init.d/initrd-fifo", arguments, true);
+			}
+
+			// OpenRC boot
 			{
 				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "boot", NULL }; run_command("/bin/busybox", arguments, true);
 			}
+			// OpenRC default
 			{
 				const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/openrc", "default", NULL }; run_command("/bin/busybox", arguments, true);
 			}
@@ -550,7 +592,7 @@ bool file_exists(char * file_path) {
 }
 
 // https://stackoverflow.com/a/3747128/14164574
-char * read_file(char * file_path) {
+char * read_file(char * file_path, bool strip_newline) {
 	// Ensure that specified file exists, then try to read it
 	if(access(file_path, F_OK) == 0) {
 		FILE * fp;
@@ -560,8 +602,13 @@ char * read_file(char * file_path) {
 		fp = fopen(file_path , "rb");
 
 		fseek(fp, 0L , SEEK_END);
-		// Remove trailing newline
-		lSize = ftell(fp) - 1;
+		// If requested, remove trailing newline
+		if(strip_newline == true) {
+			lSize = ftell(fp) - 1;
+		}
+		else {
+			lSize = ftell(fp);
+		}
 		rewind(fp);
 
 		// Allocate memory for entire content
@@ -572,8 +619,12 @@ char * read_file(char * file_path) {
 		if(1 != fread(buffer, lSize, 1, fp)) {
 			fclose(fp);
 		}
+		else {
+			fclose(fp);
+		}
 
-		fclose(fp);
+		// Return the buffer
+		return(buffer);
 		free(buffer);
 	}
 	else {
@@ -666,7 +717,7 @@ int set_if_flags(char * if_name, short flags) {
 	strncpy(ifr.ifr_name, if_name, IFNAMSIZ);
 
 	if((skfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		printf("socket error %s\n", strerror(errno));
+		printf("Socket error %s\n", strerror(errno));
 		res = 1;
 		goto out;
 	}
@@ -863,20 +914,26 @@ void read_sector(char * device_node, unsigned long sector, int sector_size, unsi
 	close(fd);
 }
 
-void show_alert_splash(int error_code) {
+void show_alert_splash(int error_code, bool flag) {
 	// Converting error code to char
 	char code[10];
 	sprintf(code, "%d", error_code);
 
 	// Showing alert splash
-	const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", code, NULL };
-	run_command("/etc/init.d/inkbox-splash", arguments, true);
+	if(flag == true) {
+		const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", code, "flag", NULL };
+		run_command("/etc/init.d/inkbox-splash", arguments, true);
+	}
+	else {
+		const char * arguments[] = { "/etc/init.d/inkbox-splash", "alert_splash", code, NULL };
+		run_command("/etc/init.d/inkbox-splash", arguments, true);
+	}
 }
 
 void set_progress(int progress_value) {
 	// Converting progress value to char
 	char progress[3];
-	sprintf(progress, "%d", progress_value);
+	sprintf(progress, "%d\n", progress_value);
 
 	// Sending progress value to named pipe
 	write_file(PROGRESS_BAR_FIFO_PATH, progress);
@@ -884,4 +941,37 @@ void set_progress(int progress_value) {
 
 void progress_sleep() {
 	usleep(500);
+}
+
+// https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/80eb0500c3f360f78563cc380617a56c5b62c01f/src/appsFreeze.cpp#L21-L44
+int get_pid_by_name(char * name) {
+	struct dirent * entry = NULL;
+	DIR * dp = NULL;
+
+	char proc[] = "/proc";
+	dp = opendir(proc);
+	while((entry = readdir(dp))) {
+		// cmdline is more accurate, sometimes status may be buggy
+		char cmdline_file[1024];
+		sprintf(cmdline_file, "%s%s/cmdline", proc, entry->d_name);
+		char * cmdline = read_file(cmdline_file, true);
+		// https://stackoverflow.com/questions/2340281/check-if-a-string-contains-a-string-in-c
+		if(strstr(cmdline, name)) {
+			// After closing directory, it's impossible to call entry->d_name
+			int return_pid = atoi(entry->d_name);
+			closedir(dp);
+			return return_pid;
+		}
+	}
+	// If we get here, we haven't found any PID
+	closedir(dp);
+	return -1;
+}
+
+// https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/80eb0500c3f360f78563cc380617a56c5b62c01f/src/appsFreeze.cpp#L108-L114
+void kill_process(char * name, int signal) {
+	int pid = get_pid_by_name(name);
+	if(pid != -1) {
+		kill(pid, signal);
+	}
 }

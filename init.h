@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <libgen.h>
+#include <dirent.h>
 
 // Defines
 #define initModule(module_image, len, param_values) syscall(__NR_init_module, module_image, len, param_values)
@@ -68,7 +69,7 @@ char * x11_start;
 // Functions
 int run_command(const char * path, const char * arguments[], bool wait);
 bool file_exists(char * file_path);
-char * read_file(char * file_path);
+char * read_file(char * file_path, bool strip_newline);
 bool write_file(char * file_path, char * content);
 bool copy_file(char * source_file, char * destination_file);
 bool mkpath(char * path, mode_t mode);
@@ -82,8 +83,10 @@ void setup_usb_debug(bool boot);
 void setup_usbnet();
 void setup_shell();
 void read_sector(char * device_node, unsigned long sector, int sector_size, unsigned long bytes_to_read);
-void show_alert_splash(int error_code);
+void show_alert_splash(int error_code, bool flag);
 void set_progress(int progress_value);
 void progress_sleep();
+int get_pid_by_name(char * name);
+void kill_process(char * name, int signal);
 
 #endif // INIT_H
