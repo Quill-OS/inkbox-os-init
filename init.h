@@ -36,7 +36,7 @@
 #define BOOT_STANDARD 0
 #define BOOT_DIAGNOSTICS 1
 #define SERIAL_FIFO_PATH "/tmp/serial-fifo"
-#define PROGRESS_BAR_FIFO_PATH "/tmp/progress_bar_fifo"
+#define PROGRESS_BAR_FIFO_PATH "/run/progress_bar_fifo"
 
 // Variables
 char * device;

@@ -343,7 +343,7 @@ int main() {
 
 		// Mounting root filesystem
 		if(strstr(mount_rw, "true")) {
-			// Mount read-write
+			// Mounting read-write
 			const char * arguments[] = { "/etc/init.d/overlay-mount", "rw", NULL };
 			int exit_code =	run_command("/etc/init.d/overlay-mount", arguments, true);
 			if(exit_code != 0) {
@@ -351,7 +351,7 @@ int main() {
 			}
 		}
 		else {
-			// Mount read-only (default)
+			// Mounting read-only (default)
 			const char * arguments[] = { "/etc/init.d/overlay-mount", "ro", NULL };
 			int exit_code = run_command("/etc/init.d/overlay-mount", arguments, true);
 			if(exit_code != 0) {
@@ -380,7 +380,8 @@ int main() {
 			else if(strstr(login_shell, "zsh")) {
 				{
 					const char * arguments[] = { "/bin/sed", "-i", "1s#.*#root:x:0:0:root:/root:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
-				}				{
+				}
+				{
 					const char * arguments[] = { "/bin/sed", "-i", "30s#.*#user:x:1000:1000:Linux User,,,:/:/usr/local/bin/zsh#", "/opt/passwd_root", NULL }; run_command("/bin/sed", arguments, true);
 				}
 			}
@@ -543,7 +544,7 @@ int main() {
 
 			set_progress(100);
 			usleep(500);
-			write_file("/run/progress_bar_fifo", "stop\n");
+			write_file(PROGRESS_BAR_FIFO_PATH, "stop\n");
 
 			// Init ramdisk named pipe
 			{
