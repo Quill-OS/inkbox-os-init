@@ -1,7 +1,19 @@
 #include "init.h"
 
 int main() {
+	// Device identification
 	device = read_file("/opt/device", true);
+
+	// TTY device
+	if(strstr(device, "emu")) {
+		tty = "ttyAMA0";
+	}
+	else if(strstr(device, "bpi")) {
+		tty = "ttyS0";
+	}
+	else {
+		tty = "ttymxc0";
+	}
 
 	// Filesystems
 	mount("proc", "/proc", "proc", MS_NOSUID, "");
@@ -288,6 +300,8 @@ int main() {
 		boot_usb_debug = read_file("/mnt/flags/BOOT_USB_DEBUG", true);
 		if(strstr(boot_usb_debug, "true")) {
 			info("Starting init ramdisk boot USB debug framework", INFO_OK);
+			// Re-setting flag
+			write_file("/mnt/flags/BOOT_USB_DEBUG", "false\n");
 			setup_usb_debug(true);
 		}
 	}
@@ -576,9 +590,10 @@ int main() {
 		}
 	}
 
-	// Avoid zombie processes
-	write_file("/run/init-fifo", "stop\n");
-	sleep(-1);
+	// Start getty in chroot
+	while(true) {
+		const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
+	}
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/functions.cpp#L415-L430
@@ -921,20 +936,10 @@ void setup_usbnet() {
 }
 
 void setup_shell() {
-	// /etc/inittab hackery
-	remove("/usr/sbin/chroot");
-	if(strstr(device, "emu")) {
-		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyAMA0 115200 linux");
+	// Starting getty in init ramdisk root
+	while(true) {
+		const char * arguments[] = { "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
 	}
-	else if(strstr(device, "bpi")) {
-		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttyS0 115200 linux");
-	}
-	else {
-		write_file("/usr/sbin/chroot", "#!/bin/sh\n\n/sbin/getty -L ttymxc0 115200 linux");
-	}
-	// Setting executable bit
-	chmod("/usr/sbin/chroot", 0777);
-	exit(EXIT_SUCCESS);
 }
 
 void read_sector(char * device_node, unsigned long sector, int sector_size, unsigned long bytes_to_read) {
