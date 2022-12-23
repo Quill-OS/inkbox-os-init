@@ -292,6 +292,9 @@ int main() {
 		}
 	}
 
+	// DIAGS_BOOT
+	diags_boot = read_file("/mnt/flags/DIAGS_BOOT", true);
+
 	// INITRD_DEBUG
 	if(root == true) {
 		initrd_debug = read_file("/mnt/flags/INITRD_DEBUG", true);
@@ -311,8 +314,14 @@ int main() {
 		info("Boot mode: Diagnostics", INFO_OK);
 	}
 	else {
-		boot_mode = BOOT_STANDARD;
-		info("Boot mode: Standard", INFO_OK);
+		if(strstr(diags_boot, "true")) {
+			boot_mode = BOOT_DIAGNOSTICS;
+			info("Boot mode: Diagnostics", INFO_OK);
+		}
+		else {
+			boot_mode = BOOT_STANDARD;
+			info("Boot mode: Standard", INFO_OK);
+		}
 	}
 
 	if(boot_mode == BOOT_STANDARD) {
@@ -437,34 +446,11 @@ int main() {
 		progress_sleep();
 
 		// SquashFS archives
-		// Userspace 'root' flag
-		if(root == true) {
-			const char * arguments[] = { "/sbin/losetup", "/dev/loop7", "/opt/root.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
-			mount("/dev/loop7", "/mnt/opt/root", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
-		}
-		// Public key
-		{
-			const char * arguments[] = { "/sbin/losetup", "/dev/loop6", "/opt/key.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
-			mount("/dev/loop6", "/mnt/opt/key", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
-		}
-		// Modules
-		{
-			const char * arguments[] = { "/sbin/losetup", "/dev/loop5", "/opt/modules.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
-			mount("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
-		}
+		mount_squashfs_archives();
 		info("Mounted core SquashFS archives", INFO_OK);
 
 		// Essential filesystems
-		// proc
-		mount("/proc", "/mnt/proc", "", MS_BIND | MS_REC, "");
-		// sys
-		mount("/sys", "/mnt/sys", "", MS_BIND | MS_REC, "");
-		// dev
-		mount("/dev", "/mnt/dev", "", MS_BIND | MS_REC, "");
-		// tmp
-		mount("tmpfs", "/mnt/tmp", "tmpfs", 0, "size=16M");
-		// log
-		mount("tmpfs", "/mnt/var/log", "tmpfs", 0, "size=8M");
+		mount_essential_filesystems();
 		// developer
 		if(root == true) {
 			mount("tmpfs", "/mnt/opt/developer", "tmpfs", 0, "size=128K");
@@ -562,8 +548,37 @@ int main() {
 		}
 	}
 	else {
-		// Diagnostics mode
+		// Preparing Diagnostics chroot environment
+		// Mounting base Diagnostics root filesystem
+		{
+			const char * arguments[] = { "/etc/init.d/overlay-mount", "recovery", NULL };
+			int ret = run_command("/etc/init.d/overlay-mount", arguments, true);
+			if(ret != 0) {
+				exit(ret);
+			}
+			info("Mounted base recovery filesystem", INFO_OK);
+		}
+		// Mounting boot flags partition
+		mount("/dev/mmcblk0p1", "/mnt/boot", "ext4", 0, "");
+		// Essential filesystems
+		mount_essential_filesystems();
+		info("Mounted essential filesystems", INFO_OK);
+		// SquashFS archives
+		mount_squashfs_archives();
+		info("Mounted SquashFS archives", INFO_OK);
+		
+		// Launching Diagnostics subsysten
+		{
+			const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/opt/bin/diagnostics_splash", NULL }; run_command("/bin/busybox", arguments, true);
+		}
+		{
+			const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/opt/recovery/launch.sh", NULL }; run_command("/bin/busybox", arguments, true);
+		}
 	}
+
+	// Avoid zombie processes
+	write_file("/run/init-fifo", "stop\n");
+	sleep(-1);
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/functions.cpp#L415-L430
@@ -798,7 +813,11 @@ int info(char * message, int mode) {
 void launch_dfl() {
 	// Loading USB Mass Storage (USBMS) modules
 	mkpath("/modules", 0755);
-	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
+	{
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+		mount("/dev/loop0", "/modules", "squashfs", 0, "");
+	}
+
 	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
@@ -807,8 +826,14 @@ void launch_dfl() {
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/usb_f_mass_storage.ko", "");
 	}
-	if(strstr(device, "emu")) {
+	if(!strstr(device, "emu")) {
 		load_module("/modules/g_mass_storage.ko", "file=/dev/mmcblk0 removable=y stall=0");
+	}
+
+	// Unmount modules
+	{
+		umount("/modules");
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop0", "/opt/root.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
 	}
 
 	// Splash time
@@ -846,7 +871,10 @@ void setup_usb_debug(bool boot) {
 void setup_usbnet() {
 	// Load modules
 	mkpath("/modules", 0755);
-	mount("/opt/modules.sqsh", "/modules", "squashfs", 0, "");
+	{
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+		mount("/dev/loop0", "/modules", "squashfs", 0, "");
+	}
 
 	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
@@ -875,6 +903,12 @@ void setup_usbnet() {
 	}
 	else {
 		load_module("/modules/g_ether.ko", "");
+	}
+
+	// Unmount modules
+	{
+		umount("/modules");
+		const char * arguments[] = { "/sbin/losetup", "-d", "/dev/loop0", NULL }; run_command("/sbin/losetup", arguments, true);
 	}
 
 	// Setting up network interface
@@ -974,5 +1008,36 @@ void kill_process(char * name, int signal) {
 	int pid = get_pid_by_name(name);
 	if(pid != -1) {
 		kill(pid, signal);
+	}
+}
+
+void mount_essential_filesystems() {
+	// proc
+	mount("/proc", "/mnt/proc", "", MS_BIND | MS_REC, "");
+	// sys
+	mount("/sys", "/mnt/sys", "", MS_BIND | MS_REC, "");
+	// dev
+	mount("/dev", "/mnt/dev", "", MS_BIND | MS_REC, "");
+	// tmp
+	mount("tmpfs", "/mnt/tmp", "tmpfs", 0, "size=16M");
+	// log
+	mount("tmpfs", "/mnt/var/log", "tmpfs", 0, "size=8M");
+}
+
+void mount_squashfs_archives() {
+	// Userspace 'root' flag
+	if(root == true) {
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop7", "/opt/root.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+		mount("/dev/loop7", "/mnt/opt/root", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+	}
+	// Public key
+	{
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop6", "/opt/key.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+		mount("/dev/loop6", "/mnt/opt/key", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+	}
+	// Modules
+	{
+		const char * arguments[] = { "/sbin/losetup", "/dev/loop5", "/opt/modules.sqsh", NULL }; run_command("/sbin/losetup", arguments, true);
+		mount("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
 	}
 }

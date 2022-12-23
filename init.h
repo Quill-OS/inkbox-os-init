@@ -56,6 +56,7 @@ char * dont_boot;
 char * encrypt_lock;
 char * dfl;
 char * boot_usb_debug;
+char * diags_boot;
 char * usbnet_ip;
 char * initrd_debug;
 char * sector_content;
@@ -88,5 +89,7 @@ void set_progress(int progress_value);
 void progress_sleep();
 int get_pid_by_name(char * name);
 void kill_process(char * name, int signal);
+void mount_essential_filesystems();
+void mount_squashfs_archives();
 
 #endif // INIT_H
