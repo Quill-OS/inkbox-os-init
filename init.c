@@ -566,7 +566,7 @@ int main() {
 		// SquashFS archives
 		mount_squashfs_archives();
 		info("Mounted SquashFS archives", INFO_OK);
-		
+
 		// Launching Diagnostics subsysten
 		{
 			const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/opt/bin/diagnostics_splash", NULL }; run_command("/bin/busybox", arguments, true);
@@ -781,10 +781,6 @@ int set_if_ip_address(char * if_name, char * ip_address) {
 	// Closing file descriptor
 	close(fd);
 
-	// Clear ip_address buffer with 0x20- space
-	memset((unsigned char*)ip_address, 0x20, 15);
-	ioctl(fd, SIOCGIFADDR, &ifr);
-
 	return res;
 }
 
@@ -880,7 +876,7 @@ void setup_usbnet() {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
 	if(strstr(device, "n705") || strstr(device, "n905b") || strstr(device, "n905c") || strstr(device, "n613") || strstr(device, "n236") || strstr(device, "n437")) {
-		load_module("/module/g_ether.ko", "");
+		load_module("/modules/g_ether.ko", "");
 	}
 	else if(strstr(device, "n306") || strstr(device, "n873") || strstr(device, "bpi")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
@@ -914,7 +910,7 @@ void setup_usbnet() {
 	// Setting up network interface
 	set_if_up("usb0");
 	// Checking for custom IP address
-	if(!(strstr(usbnet_ip, ""))) {
+	if(usbnet_ip != NULL && usbnet_ip[0] != '\0') {
 		if(set_if_ip_address("usb0", usbnet_ip) != 0) {
 			set_if_ip_address("usb0", "192.168.2.2");
 		}
