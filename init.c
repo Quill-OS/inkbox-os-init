@@ -26,7 +26,7 @@ int main() {
 	if(strstr(device, "kt")) {
 		// Unsquashing modules
 		{
-			const char * arguments[] = { "/bin/unsquashfs", "-d", "/lib/modules", "/opt/modules.sqsh", NULL }; run_command("/bin/unsquashfs", arguments, true);
+			const char * arguments[] = { "/usr/bin/unsquashfs", "-d", "/lib/modules", "/opt/modules.sqsh", NULL }; run_command("/usr/bin/unsquashfs", arguments, true);
 		}
 
 		// Loading framebuffer modules
@@ -91,9 +91,6 @@ int main() {
 
 	// USBNET_IP
 	usbnet_ip = read_file("/mnt/flags/USBNET_IP", true);
-
-	// WILL_UPDATE
-	will_update = read_file("/mnt/flags/WILL_UPDATE", true);
 	
 	// MOUNT_RW
 	mount_rw = read_file("/mnt/flags/MOUNT_RW", true);
@@ -319,7 +316,7 @@ int main() {
 	}
 
 	// Unmounting boot flags partition
-	umount("/mnt");
+        umount("/mnt");
 
 	// Handling boot mode switching
 	if(power_button_pressed == true) {
@@ -342,6 +339,11 @@ int main() {
 		// Standard mode
 		// Checking whether we need to show an update splash or not
 		if(!(strstr(display_debug, "true"))) {
+			// WILL_UPDATE flag
+			mount("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
+			will_update = read_file("/mnt/flags/WILL_UPDATE", true);
+			umount("/mnt");
+
 			if(strstr(will_update, "true")) {
 				const char * arguments[] = { "/etc/init.d/inkbox-splash", "update_splash", NULL }; update_splash_pid = run_command("/etc/init.d/inkbox-splash", arguments, false);
 			}
@@ -591,9 +593,8 @@ int main() {
 	}
 
 	// Start getty in chroot
-	while(true) {
-		const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
-	}
+	const char * arguments[] = { "/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
+	sleep(-1);
 }
 
 // https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/8296c4a1811e3921ff98e9980504c24d23435dac/src/functions.cpp#L415-L430
@@ -937,9 +938,8 @@ void setup_usbnet() {
 
 void setup_shell() {
 	// Starting getty in init ramdisk root
-	while(true) {
-		const char * arguments[] = { "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
-	}
+	const char * arguments[] = { "/sbin/getty", "-L", tty, "115200", "linux", NULL }; run_command("/bin/busybox", arguments, true);
+	sleep(-1);
 }
 
 void read_sector(char * device_node, unsigned long sector, int sector_size, unsigned long bytes_to_read) {
