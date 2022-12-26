@@ -511,6 +511,7 @@ int main() {
 				info("Aborting boot and powering off", INFO_FATAL);
 				kill_process("inkbox-splash", SIGTERM);
 				show_alert_splash(2, true);
+				exit(EXIT_FAILURE);
 			}
 			else {
 				// Mounting GUI root filesystem
