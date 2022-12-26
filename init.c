@@ -506,7 +506,7 @@ int main() {
 		{
 			// Validating digital signature
 			const char * arguments[] = { "/usr/bin/openssl", "dgst", "-sha256", "-verify", "/mnt/opt/key/public.pem", "-signature", "/mnt/opt/storage/gui_rootfs.isa.dgst", "/mnt/opt/storage/gui_rootfs.isa", NULL };
-			if(!run_command("/usr/bin/openssl", arguments, true) && !strstr(developer_key, "true")) {
+			if(run_command("/usr/bin/openssl", arguments, true) != 0 && strstr(developer_key, "true") != 0) {
 				info("GUI root filesystem's digital signature is invalid!", INFO_FATAL);
 				info("Aborting boot and powering off", INFO_FATAL);
 				kill_process("inkbox-splash", SIGTERM);
