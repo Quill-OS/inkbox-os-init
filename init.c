@@ -103,7 +103,7 @@ int main() {
 
 	// Information header
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
-	printf("Copyright (C) 2021-2022 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
+	printf("Copyright (C) 2021-2023 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
 
 	// Checking filesystems
 	info("Checking filesystems ...", INFO_OK);
