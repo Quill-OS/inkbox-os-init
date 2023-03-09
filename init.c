@@ -22,6 +22,25 @@ int main() {
 	mount("devtmpfs", "/dev", "devtmpfs", 0, "");
 	mount("tmpfs", "/tmp", "tmpfs", 0, "size=16M");
 
+	// Kobo Clara HD (N249) specific stuff
+	if(strstr(device, "n249")) {
+		// Unsquashing modules
+		{
+			const char * arguments[] = { "/usr/bin/unsquashfs", "-d", "/lib/modules", "/opt/modules.sqsh", NULL }; run_command("/usr/bin/unsquashfs", arguments, true);
+		}
+
+		// Put epdc.fw in the right place
+		mkpath("/lib/firmware/imx", 0755);
+		{
+			const char * arguments[] = { "/usr/bin/unsquashfs", "-d", "/lib/firmware/imx/epdc", "/opt/firmware.sqsh", NULL }; run_command("/usr/bin/unsquashfs", arguments, true);
+		}
+
+		// Load some modules
+		load_module("/lib/modules/5.16.0/kernel/drivers/hwmon/tps6518x-hwmon.ko", "");
+		load_module("/lib/modules/5.16.0/kernel/drivers/regulator/tps6518x-regulator.ko", "");
+		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
+	}
+
 	// Framebuffer (Kindle Touch-specific)
 	if(strstr(device, "kt")) {
 		// Unsquashing modules
