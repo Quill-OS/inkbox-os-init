@@ -22,7 +22,7 @@ int main() {
 	mount("devtmpfs", "/dev", "devtmpfs", 0, "");
 	mount("tmpfs", "/tmp", "tmpfs", 0, "size=16M");
 
-	// Kobo Clara HD (N249) specific stuff
+	// Kobo Clara HD (N249) handling
 	if(strstr(device, "n249")) {
 		// Unsquashing modules
 		{
@@ -41,7 +41,7 @@ int main() {
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
 	}
 
-	// Framebuffer (Kindle Touch-specific)
+	// Kindle Touch (KT) handling
 	if(strstr(device, "kt")) {
 		// Unsquashing modules
 		{
