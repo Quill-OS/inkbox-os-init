@@ -18,6 +18,10 @@ int main() {
 	// Filesystems
 	mount("proc", "/proc", "proc", MS_NOSUID, "");
 	mount("sysfs", "/sys", "sysfs", 0, "");
+	// Prevent unpriviledged users to read and write to sysfs by default
+	{
+		const char * arguments[] = { "/bin/sh", "-c", "find /sys -type f -print0 | xargs -0 chmod 700", NULL }; run_command("/bin/sh", arguments, true);
+	}
 	sleep(1);
 	mount("devtmpfs", "/dev", "devtmpfs", 0, "");
 	mount("tmpfs", "/tmp", "tmpfs", 0, "size=16M");
