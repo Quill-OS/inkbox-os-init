@@ -32,6 +32,7 @@
 #define INFO_FATAL 2
 #define ROOT_FLAG_SECTOR 79872
 #define ROOT_FLAG_SECTOR_KT 98304
+#define ROOT_FLAG_SIZE 6
 #define BUTTON_INPUT_DEVICE "/dev/input/event0"
 #define BOOT_STANDARD 0
 #define BOOT_DIAGNOSTICS 1
@@ -46,9 +47,8 @@ bool root = false;
 bool power_button_pressed = false;
 bool other_button_pressed = false;
 int boot_mode = BOOT_STANDARD;
-char * space = " ";
 static int skfd = -1; // AF_INET socket for ioctl() calls
-char * kernel_version;
+char * kernel_version = NULL;
 char * kernel_build_id;
 char * kernel_git_commit;
 char * display_debug;
@@ -59,7 +59,7 @@ char * boot_usb_debug;
 char * diags_boot;
 char * usbnet_ip;
 char * initrd_debug;
-char * sector_content;
+char sector_content[ROOT_FLAG_SIZE];
 char * will_update;
 int update_splash_pid;
 char * mount_rw;

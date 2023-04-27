@@ -89,11 +89,16 @@ int main() {
 	// Kernel version
 	struct utsname uname_data;
 	uname(&uname_data);
-	kernel_version = uname_data.sysname;
-	strncat(kernel_version, space, sizeof(space));
-	strncat(kernel_version, uname_data.nodename, sizeof(uname_data.nodename));
-	strncat(kernel_version, space, sizeof(space));
-	strncat(kernel_version, uname_data.version, sizeof(uname_data.version));
+       // Pass 0 to snprintf to let it tell us how large of a buffer we need
+       int size = snprintf(kernel_version, 0U, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version);
+       if (size < 0) {
+               // snprintf said no! handle it!
+       } else {
+               kernel_version = alloca(size + 1U); // We need a trailing NULL
+               if (snprintf(kernel_version, size, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version) < 0) {
+                       // snprintf said no again! handle it!
+               }
+       }
 	// Kernel build ID
 	kernel_build_id = read_file("/opt/build_id", true);
 	// Kernel Git commit
@@ -140,16 +145,13 @@ int main() {
 	}
 	{
 		// P2
-		const char * arguments[] = { };
-		arguments[0] = "/usr/bin/fsck.ext4", arguments[1] = "-y";
-		if(strstr(device, "n873")) {
-			arguments[2] = "/dev/mmcblk0p5";
+               if (strstr(device, "n873")) {
+                       const char * arguments[] = { "/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p5", NULL };
+                       run_command("/usr/bin/fsck.ext4", arguments, true);
+               } else {
+                       const char * arguments[] = { "/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p2", NULL };
+                       run_command("/usr/bin/fsck.ext4", arguments, true);
 		}
-		else {
-			arguments[2] = "/dev/mmcblk0p2";
-		}
-		arguments[3] = NULL;
-		run_command("/usr/bin/fsck.ext4", arguments, true);
 	}
 	{
 		// P3
@@ -204,7 +206,6 @@ int main() {
 	// Are we spawning a shell?
 	// https://stackoverflow.com/a/19186027/14164574
 	{
-		char * value;
 		struct timeval tmo;
 		fd_set readfds;
 
@@ -233,16 +234,16 @@ int main() {
 	// Checking if the 'root' flag is set
 	{
 		// MMC
-		char root_flag[6];
 		if(strstr(device, "kt")) {
-			read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR_KT, 512, 6);
+                       read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR_KT, 512, ROOT_FLAG_SIZE);
 		}
 		else {
-			read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR, 512, 6);
+                       read_sector("/dev/mmcblk0", ROOT_FLAG_SECTOR, 512, ROOT_FLAG_SIZE);
 		}
-		sprintf(root_flag, "%s", &sector_content);
+               char root_flag[ROOT_FLAG_SIZE] = { 0 };
+               memcpy(root_flag, sector_content, ROOT_FLAG_SIZE);
 
-		if(strstr(root_flag, "rooted")) {
+               if(memcmp(root_flag, "rooted", ROOT_FLAG_SIZE) == 0) {
 			root_mmc = true;
 		}
 		else {
@@ -446,9 +447,9 @@ int main() {
 			}
 			else {
 				if(!(strstr(login_shell, "")) && !(strstr(login_shell, "ash"))) {
-					char * message;
-					sprintf(message, "'%s' is not a valid login shell; falling back to default", login_shell);
-					info(message, INFO_WARNING);
+                                       char message_buff[256] = { 0 };
+                                       snprintf(message_buff, sizeof(message_buff), "'%s' is not a valid login shell; falling back to default", login_shell);
+                                       info(message_buff, INFO_WARNING);
 				}
 			}
 		}
@@ -691,14 +692,13 @@ char * read_file(char * file_path, bool strip_newline) {
 // https://stackoverflow.com/a/14576624/14164574
 bool write_file(char * file_path, char * content) {
 	FILE *file = fopen(file_path, "wb");
-
-	int rc = fputs(content, file);
-	if (rc == EOF) {
+       if (!file) {
 		return false;
 	}
-	else {
-		fclose(file);
-	}
+
+       int rc = fputs(content, file);
+       fclose(file);
+       return !!(rc != EOF);
 }
 
 // https://stackoverflow.com/a/39191360/14164574
@@ -757,11 +757,14 @@ int load_module(char * module_path, char * params) {
 	read(fd, image, image_size);
 	close(fd);
 
-	if(initModule(image, image_size, params) != 0) {
+       int rc = initModule(image, image_size, params);
+       free(image);
+       if(rc != 0) {
 		fprintf(stderr, "Couldn't init module %s\n", module_path);
+               return EXIT_FAILURE;
 	}
 
-	free(image);
+       return EXIT_SUCCESS;
 }
 
 // https://stackoverflow.com/a/49334887/14164574
