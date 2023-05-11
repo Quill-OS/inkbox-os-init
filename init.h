@@ -1,10 +1,16 @@
 #ifndef INIT_H
 #define INIT_H
 
+// GNUisms welcome!
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <alloca.h>
+#include <signal.h>
+#include <poll.h>
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
@@ -16,7 +22,7 @@
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
-#include <linux/module.h>
+//#include <linux/module.h>
 #include <linux/input.h>
 #include <net/if.h>
 #include <netinet/in.h>
@@ -32,7 +38,7 @@
 #define INFO_FATAL 2
 #define ROOT_FLAG_SECTOR 79872
 #define ROOT_FLAG_SECTOR_KT 98304
-#define ROOT_FLAG_SIZE 6
+#define ROOT_FLAG_SIZE 6U
 #define BUTTON_INPUT_DEVICE "/dev/input/event0"
 #define BOOT_STANDARD 0
 #define BOOT_DIAGNOSTICS 1
@@ -40,57 +46,57 @@
 #define PROGRESS_BAR_FIFO_PATH "/run/progress_bar_fifo"
 
 // Variables
-char * device;
-bool root_mmc = false;
-bool root_initrd = false;
-bool root = false;
-bool power_button_pressed = false;
-bool other_button_pressed = false;
-int boot_mode = BOOT_STANDARD;
-static int skfd = -1; // AF_INET socket for ioctl() calls
-char * kernel_version = NULL;
-char * kernel_build_id;
-char * kernel_git_commit;
-char * display_debug;
-char * dont_boot;
-char * encrypt_lock;
-char * dfl;
-char * boot_usb_debug;
-char * diags_boot;
+char * device = NULL;
+char tty[8] = { 0 };
 char * usbnet_ip;
-char * initrd_debug;
-char sector_content[ROOT_FLAG_SIZE];
-char * will_update;
-int update_splash_pid;
-char * mount_rw;
-char * login_shell;
-char * developer_key;
-char * x11_start;
-char * tty;
+bool root = false;
+
+// Macros
+#define MATCH(s1, s2) (s1 && strcmp(s1, s2) == 0)
+#define NOT_MATCH(s1, s2) (s1 && strcmp(s1, s2) != 0)
+#define FILE_EXISTS(path) access(path, F_OK) == 0
+#define MOUNT(s, t, f, m, d) \
+({ \
+        if(mount(s, t, f, m, d) != 0) { \
+                perror("Failed to mount " t); \
+                exit(EXIT_FAILURE); \
+        } \
+})
+// Have to waipid the returned value at a later time to collect zombies
+#define RUN(prog, ...) \
+({ \
+        const char * const args[] = { prog, ##__VA_ARGS__, NULL }; \
+	run_command(prog, args, false); \
+})
+// Will wait until termination to collect the process
+#define REAP(prog, ...) \
+({ \
+        const char * const args[] = { prog, ##__VA_ARGS__, NULL }; \
+	run_command(prog, args, true); \
+})
 
 // Functions
-int run_command(const char * path, const char * arguments[], bool wait);
-bool file_exists(char * file_path);
-char * read_file(char * file_path, bool strip_newline);
-bool write_file(char * file_path, char * content);
-bool copy_file(char * source_file, char * destination_file);
-bool mkpath(char * path, mode_t mode);
-int load_module(char * module_path, char * params);
-int set_if_flags(char * if_name, short flags);
-int set_if_up(char * if_name);
-int set_if_ip_address(char * if_name, char * ip_address);
-int info(char * message, int mode);
-void launch_dfl();
+long int run_command(const char * path, const char * const arguments[], bool wait);
+char * read_file(const char * file_path, bool strip_newline);
+bool write_file(const char * file_path, const char * content);
+bool copy_file(const char * source_file, const char * destination_file);
+int mkpath(const char * path, mode_t mode);
+int load_module(const char * module_path, const char * params);
+int set_if_flags(const char * if_name, short flags);
+int set_if_up(const char * if_name);
+int set_if_ip_address(const char * if_name, const char * ip_address);
+int info(const char * message, int mode);
+void launch_dfl(void);
 void setup_usb_debug(bool boot);
-void setup_usbnet();
-void setup_shell();
-void read_sector(char * device_node, unsigned long sector, int sector_size, unsigned long bytes_to_read);
+void setup_usbnet(void);
+void setup_shell(void);
+void read_sector(char * buff, size_t len, const char * device_node, off_t sector, size_t sector_size);
 void show_alert_splash(int error_code, bool flag);
 void set_progress(int progress_value);
-void progress_sleep();
-int get_pid_by_name(char * name);
-void kill_process(char * name, int signal);
-void mount_essential_filesystems();
-void mount_squashfs_archives();
+void progress_sleep(void);
+int get_pid_by_name(const char * name);
+void kill_process(const char * name, int signal);
+void mount_essential_filesystems(void);
+void mount_squashfs_archives(void);
 
 #endif // INIT_H
