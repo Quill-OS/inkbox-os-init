@@ -169,8 +169,6 @@ int main(void) {
 	kernel_git_commit = NULL;
 	free(kernel_build_id);
 	kernel_build_id = NULL;
-	free(kernel_version);
-	kernel_version = NULL;
 
 	// Checking filesystems
 	info("Checking filesystems ...", INFO_OK);
@@ -652,7 +650,7 @@ int main(void) {
 	REAP("/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux");
 
 	while(true) {
-		sleep(-1U);
+		wait(NULL);
 	}
 }
 

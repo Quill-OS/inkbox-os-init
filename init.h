@@ -22,7 +22,7 @@
 #include <sys/syscall.h>
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
-//#include <linux/module.h>
+#include <linux/limits.h>
 #include <linux/input.h>
 #include <net/if.h>
 #include <netinet/in.h>
