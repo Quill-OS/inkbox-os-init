@@ -574,7 +574,7 @@ int main(void) {
 		REAP("/etc/init.d/developer-key");
 		developer_key = read_file("/mnt/opt/developer/key/valid-key", true);
 		// 'Developer mode' splash
-		if(MATCH(developer_key, "true") && do_update) {
+		if(MATCH(developer_key, "true")) {
 			pid_t splash_pid = RUN("/etc/init.d/inkbox-splash", "developer_splash"); // FIXME: Kill & collect?
 		}
 
