@@ -335,7 +335,8 @@ int main(void) {
 	tv.tv_usec = 0;
 
 	while(true) {
-		/* Linux modifies tv to reflect the amount of time not slept (i.e., the amount of time left in the timeout),
+		/*
+		 * Linux modifies tv to reflect the amount of time not slept (i.e., the amount of time left in the timeout),
 		 * we rely on that to only loop for 3s max without having to compute anything ourselves.
 		*/
 		int rv = select(fd + 1, &rfds, NULL, NULL, &tv);
