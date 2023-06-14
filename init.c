@@ -587,7 +587,7 @@ int main(void) {
 		if(rc != 0 && NOT_MATCH(developer_key, "true")) {
 			info("GUI root filesystem's digital signature is invalid!", INFO_FATAL);
 			info("Aborting boot and powering off", INFO_FATAL);
-			kill_process("inkbox-splash", SIGTERM);
+			kill_process("inkbox-splash");
 			show_alert_splash(2, true);
 			exit(EXIT_FAILURE);
 		}
@@ -1067,61 +1067,9 @@ void progress_sleep(void) {
 	usleep(500);
 }
 
-int get_pid_by_name(const char * name) {
-	struct dirent * entry = NULL;
-	DIR * dp = NULL;
-
-	const char proc[] = "/proc/";
-	dp = opendir(proc);
-	while((entry = readdir(dp))) {
-		// cmdline is more accurate, sometimes status may be buggy
-		char cmdline_file[1024] = { 0 };
-		sprintf(cmdline_file, "%s%s/cmdline", proc, entry->d_name);
-
-		if(access(cmdline_file, F_OK) != 0) {
-			continue;
-		}
-
-		// https://www.geeksforgeeks.org/how-to-append-a-character-to-a-string-in-c/
-		FILE* ptr;
-		char ch;
-		char cmdline[4096] = { 0 };
-
-		// Opening file in reading mode
-		ptr = fopen(cmdline_file, "r");
-
-		// Printing what is written in file
-		// character by character using loop.
-		do {
-			ch = fgetc(ptr);
-			strncat(cmdline, &ch, 1);
-
-			// Checking if character is not EOF.
-			// If it is EOF stop reading.
-		} while (ch != EOF);
-
-		// Closing the file
-		fclose(ptr);
-
-		// https://stackoverflow.com/questions/2340281/check-if-a-string-contains-a-string-in-c
-		if(strstr(cmdline, name)) {
-			// After closing directory, it's impossible to call entry->d_name
-			int return_pid = atoi(entry->d_name);
-			closedir(dp);
-			return return_pid;
-		}
-	}
-	// If we get here, we haven't found any PID
-	closedir(dp);
-	return -1;
-}
-
-// https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/80eb0500c3f360f78563cc380617a56c5b62c01f/src/appsFreeze.cpp#L108-L114
-void kill_process(const char * name, int signal) {
-	int pid = get_pid_by_name(name);
-	if(pid != -1) {
-		kill(pid, signal);
-	}
+void kill_process(const char * name) {
+	// If you think this is lazy work, then go there: http://pkgs-inkbox.duckdns.org:25560/misc/kill_process_nonsense.txt
+	REAP("/usr/bin/pkill", "-9", name);
 }
 
 void mount_essential_filesystems(void) {

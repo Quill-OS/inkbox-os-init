@@ -95,7 +95,7 @@ void show_alert_splash(int error_code, bool flag);
 void set_progress(int progress_value);
 void progress_sleep(void);
 int get_pid_by_name(const char * name);
-void kill_process(const char * name, int signal);
+void kill_process(const char * name);
 void mount_essential_filesystems(void);
 void mount_squashfs_archives(void);
 
