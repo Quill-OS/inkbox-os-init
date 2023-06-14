@@ -148,11 +148,11 @@ int main(void) {
 			fprintf(stderr, "alloca failed\n");
 			exit(EXIT_FAILURE);
 		}
-		if(snprintf(kernel_version, (size_t) size, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version) < 0) {
+		if(snprintf(kernel_version, (size_t) size + 1U, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version) < 0) {
 			perror("snprintf");
 
 			// Fallback
-			kernel_version = strdupa("UKNOWN");
+			kernel_version = strdupa("UNKNOWN");
 			if(!kernel_version) {
 				perror("strdupa");
 				exit(EXIT_FAILURE);
