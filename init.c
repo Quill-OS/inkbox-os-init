@@ -329,7 +329,7 @@ int main(void) {
 
 	fd_set rfds;
 	FD_ZERO(&rfds);
-	FD_SET((unsigned int) fd, &rfds);
+	FD_SET(fd, &rfds);
 	struct timeval tv;
 	tv.tv_sec = 3;
 	tv.tv_usec = 0;
@@ -338,7 +338,7 @@ int main(void) {
 		/* Linux modifies tv to reflect the amount of time not slept (i.e., the amount of time left in the timeout),
 		 * we rely on that to only loop for 3s max without having to compute anything ourselves.
 		*/
-		int rv = select(1, &rfds, NULL, NULL, &tv);
+		int rv = select(fd + 1, &rfds, NULL, NULL, &tv);
 
 		if(rv == -1 && errno != EINTR) {
 			perror("select");
