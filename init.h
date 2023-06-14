@@ -52,8 +52,8 @@ char * usbnet_ip;
 bool root = false;
 
 // Macros
-#define MATCH(s1, s2) (s1 && strcmp(s1, s2) == 0)
-#define NOT_MATCH(s1, s2) (s1 && strcmp(s1, s2) != 0)
+#define MATCH(s1, s2) ((s1 != NULL && s2 != NULL) && strcmp(s1, s2) == 0)
+#define NOT_MATCH(s1, s2) ((!s1 || !s2) || strcmp(s1, s2) != 0)
 #define FILE_EXISTS(path) access(path, F_OK) == 0
 #define MOUNT(s, t, f, m, d) \
 ({ \

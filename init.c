@@ -501,10 +501,12 @@ int main(void) {
 				write_file("/mnt/root/.config/fish/fish_variables", "# This file contains fish universal variable definitions.\n# VERSION: 3.0\nSETUVAR __fish_init_2_3_0:\\x1d\nSETUVAR __fish_init_3_x:\\x1d\nSETUVAR --export fish_user_paths:/usr/local/bin");
 			}
 			else {
-				if(NOT_MATCH(login_shell, "") && NOT_MATCH(login_shell, "ash")) {
-					char message_buff[256] = { 0 };
-					snprintf(message_buff, sizeof(message_buff), "'%s' is not a valid login shell; falling back to default", login_shell);
-					info(message_buff, INFO_WARNING);
+				if(login_shell != NULL) {
+					if(NOT_MATCH(login_shell, "") && NOT_MATCH(login_shell, "ash")) {
+						char message_buff[256] = { 0 };
+						snprintf(message_buff, sizeof(message_buff), "'%s' is not a valid login shell; falling back to default", login_shell);
+						info(message_buff, INFO_WARNING);
+					}
 				}
 			}
 		}
@@ -1065,27 +1067,49 @@ void progress_sleep(void) {
 	usleep(500);
 }
 
-// https://github.com/Kobo-InkBox/inkbox-power-daemon/blob/80eb0500c3f360f78563cc380617a56c5b62c01f/src/appsFreeze.cpp#L21-L44
 int get_pid_by_name(const char * name) {
 	struct dirent * entry = NULL;
 	DIR * dp = NULL;
 
-	const char proc[] = "/proc";
+	const char proc[] = "/proc/";
 	dp = opendir(proc);
 	while((entry = readdir(dp))) {
 		// cmdline is more accurate, sometimes status may be buggy
 		char cmdline_file[1024] = { 0 };
 		sprintf(cmdline_file, "%s%s/cmdline", proc, entry->d_name);
-		char * cmdline = read_file(cmdline_file, true);
+
+		if(access(cmdline_file, F_OK) != 0) {
+			continue;
+		}
+
+		// https://www.geeksforgeeks.org/how-to-append-a-character-to-a-string-in-c/
+		FILE* ptr;
+		char ch;
+		char cmdline[4096] = { 0 };
+
+		// Opening file in reading mode
+		ptr = fopen(cmdline_file, "r");
+
+		// Printing what is written in file
+		// character by character using loop.
+		do {
+			ch = fgetc(ptr);
+			strncat(cmdline, &ch, 1);
+
+			// Checking if character is not EOF.
+			// If it is EOF stop reading.
+		} while (ch != EOF);
+
+		// Closing the file
+		fclose(ptr);
+
 		// https://stackoverflow.com/questions/2340281/check-if-a-string-contains-a-string-in-c
 		if(strstr(cmdline, name)) {
 			// After closing directory, it's impossible to call entry->d_name
 			int return_pid = atoi(entry->d_name);
 			closedir(dp);
-			free(cmdline);
 			return return_pid;
 		}
-		free(cmdline);
 	}
 	// If we get here, we haven't found any PID
 	closedir(dp);
