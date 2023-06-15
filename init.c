@@ -136,7 +136,7 @@ int main(void) {
 	// Pass 0 to snprintf to let it tell us how large of a buffer we need
 	int size = snprintf(kernel_version, 0U, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version);
 	if(size < 0) {
-		kernel_version = strdupa("UKNOWN");
+		kernel_version = strdupa("UNKNOWN");
 		if(!kernel_version) {
 			perror("strdupa");
 			exit(EXIT_FAILURE);
