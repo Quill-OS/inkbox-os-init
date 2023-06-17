@@ -49,6 +49,8 @@
 char * device = NULL;
 char tty[8] = { 0 };
 char * usbnet_ip;
+char * usbnet_device_address;
+char * usbnet_host_address;
 bool root = false;
 
 // Macros

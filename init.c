@@ -103,9 +103,11 @@ int main(void) {
 		freopen(SERIAL_FIFO_PATH, "a+", stdout);
 	}
 
-	// USBNET_IP
+	// USB networking
+	usbnet_device_address = read_file("/mnt/flags/USBNET_DEVICE_ADDRESS", true);
+	usbnet_host_address = read_file("/mnt/flags/USBNET_HOST_ADDRESS", true);
 	usbnet_ip = read_file("/mnt/flags/USBNET_IP", true);
-	
+
 	// MOUNT_RW
 	char * mount_rw = read_file("/mnt/flags/MOUNT_RW", true);
 	bool is_mount_rw = false;
@@ -975,11 +977,21 @@ void setup_usbnet(void) {
 	REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
 
+	if(!(usbnet_device_address && *usbnet_device_address)) {
+		usbnet_device_address = '\0';
+	}
+	if(!(usbnet_host_address && *usbnet_host_address)) {
+		usbnet_host_address = '\0';
+	}
+	int options_size = 54;
+	char options[options_size];
+	snprintf(options, options_size, "dev_addr=%s host_addr=%s", usbnet_device_address, usbnet_host_address);
+
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613")) {
-		load_module("/modules/arcotg_udc.ko", "");
+		load_module("/modules/arcotg_udc.ko", options);
 	}
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613") || MATCH(device, "n236") || MATCH(device, "n437")) {
-		load_module("/modules/g_ether.ko", "");
+		load_module("/modules/g_ether.ko", options);
 	}
 	else if(MATCH(device, "n306") || MATCH(device, "n873") || MATCH(device, "bpi")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
@@ -991,17 +1003,17 @@ void setup_usbnet(void) {
 		}
 		load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
-		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", "");
+		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", options);
 	}
 	else if(MATCH(device, "kt")) {
 		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/arcotg_udc.ko", "");
-		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/g_ether.ko", "");
+		load_module("/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/g_ether.ko", options);
 	}
 	else if(MATCH(device, "emu")) {
 		;
 	}
 	else {
-		load_module("/modules/g_ether.ko", "");
+		load_module("/modules/g_ether.ko", options);
 	}
 
 	// Unmount modules
