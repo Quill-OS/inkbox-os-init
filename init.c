@@ -650,10 +650,8 @@ int main(void) {
 	}
 
 	// Start getty in chroot
-	REAP("/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux");
-
 	while(true) {
-		wait(NULL);
+		REAP("/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty, "115200", "linux");
 	}
 }
 
