@@ -517,7 +517,12 @@ int main(void) {
 
 		// passwd file
 		// Bind-mounting directly from initrd filesystem does not seem to work; copying file to temporary filesystem
-		copy_file("/opt/passwd_root", "/tmp/passwd");
+		if(root) {
+			copy_file("/opt/passwd_root", "/tmp/passwd");
+		}
+		else {
+			copy_file("/opt/passwd_lockdown", "/tmp/passwd");
+		}
 		MOUNT("/tmp/passwd", "/mnt/etc/passwd", "", MS_BIND, "");
 		// User storage
 		MOUNT("/dev/mmcblk0p4", "/mnt/opt/storage", "ext4", 0, "");
