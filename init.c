@@ -46,6 +46,7 @@ int main(void) {
 		load_module("/lib/modules/5.16.0/kernel/drivers/hwmon/tps6518x-hwmon.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/regulator/tps6518x-regulator.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
+		load_module("/lib/modules/5.16.0/kernel/drivers/video/backlight/lm3630a_bl.ko", "");
 	}
 
 	// Kindle Touch (KT) handling
