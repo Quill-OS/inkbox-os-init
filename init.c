@@ -47,6 +47,14 @@ int main(void) {
 		load_module("/lib/modules/5.16.0/kernel/drivers/regulator/tps6518x-regulator.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/backlight/lm3630a_bl.ko", "");
+
+		// Input device node hackery
+		rename("/dev/input/event0", "/dev/input/.event1");
+		rename("/dev/input/event1", "/dev/input/event0");
+		rename("/dev/input/.event1", "/dev/input/event1");
+
+		// Initial screen refresh
+		REAP("/etc/init.d/inkbox-splash", "refresh");
 	}
 
 	// Kindle Touch (KT) handling
@@ -982,6 +990,9 @@ void setup_usbnet(void) {
 	mkpath("/modules", 0755);
 	REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
+	if(MATCH(device, "n249")) {
+		MOUNT("/modules/5.16.0/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
+	}
 
 	if(!(usbnet_device_address && *usbnet_device_address)) {
 		usbnet_device_address = '\0';
@@ -999,7 +1010,7 @@ void setup_usbnet(void) {
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613") || MATCH(device, "n236") || MATCH(device, "n437")) {
 		load_module("/modules/g_ether.ko", options);
 	}
-	else if(MATCH(device, "n306") || MATCH(device, "n873") || MATCH(device, "bpi")) {
+	else if(MATCH(device, "n306") || MATCH(device, "n249") || MATCH(device, "n873") || MATCH(device, "bpi")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/u_ether.ko", "");
@@ -1007,7 +1018,9 @@ void setup_usbnet(void) {
 		if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_eem.ko")) {
 			load_module("/modules/drivers/usb/gadget/function/usb_f_eem.ko", "");
 		}
-		load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
+		if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko")) {
+			load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
+		}
 		load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
 		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", options);
 	}
