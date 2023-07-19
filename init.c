@@ -54,7 +54,8 @@ int main(void) {
 		rename("/dev/input/.event1", "/dev/input/event1");
 
 		// Initial screen refresh
-		REAP("/etc/init.d/inkbox-splash", "refresh");
+		// Leaving this for later; strangely, this causes the Clara HD's display to shift vertically; go find out why
+		// REAP("/etc/init.d/inkbox-splash", "refresh");
 	}
 
 	// Kindle Touch (KT) handling
