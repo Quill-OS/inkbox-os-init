@@ -1127,4 +1127,9 @@ void mount_squashfs_archives(void) {
 	// Modules
 	REAP("/sbin/losetup", "/dev/loop5", "/opt/modules.sqsh");
 	MOUNT("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
+	// Make insmod and modprobe coexist with already existing shell scripts
+	if(MATCH(device, "n249")) {
+		MOUNT("/mnt/lib/modules/5.16.0/kernel/", "/mnt/lib/modules", "", MS_BIND | MS_REC, "");
+		MOUNT("/lib/modules/5.16.0/", "/mnt/lib/modules/5.16.0/", "", MS_BIND | MS_REC, "");
+	}
 }
