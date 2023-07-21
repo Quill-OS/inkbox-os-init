@@ -43,10 +43,12 @@ int main(void) {
 		REAP("/usr/bin/unsquashfs", "-d", "/lib/firmware/imx/epdc", "/opt/firmware.sqsh");
 
 		// Load some modules
+		load_module("/lib/modules/5.16.0/kernel/drivers/power/supply/rn5t618_power.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/hwmon/tps6518x-hwmon.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/regulator/tps6518x-regulator.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
 		load_module("/lib/modules/5.16.0/kernel/drivers/video/backlight/lm3630a_bl.ko", "");
+		load_module("/lib/modules/5.16.0/kernel/drivers/rtc/rtc-rc5t619.ko", "");
 
 		// Input device node hackery
 		rename("/dev/input/event0", "/dev/input/.event1");
