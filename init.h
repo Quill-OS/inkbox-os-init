@@ -39,7 +39,6 @@
 #define ROOT_FLAG_SECTOR 79872
 #define ROOT_FLAG_SECTOR_KT 98304
 #define ROOT_FLAG_SIZE 6U
-#define BUTTON_INPUT_DEVICE "/dev/input/event0"
 #define BOOT_STANDARD 0
 #define BOOT_DIAGNOSTICS 1
 #define SERIAL_FIFO_PATH "/tmp/serial-fifo"
@@ -47,6 +46,8 @@
 
 // Variables
 char * device = NULL;
+char * device_variant = NULL;
+char * button_input_device = NULL;
 char tty[8] = { 0 };
 char * usbnet_ip;
 char * usbnet_device_address;

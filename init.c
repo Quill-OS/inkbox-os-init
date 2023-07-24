@@ -146,6 +146,10 @@ int main(void) {
 	// Kernel version
 	struct utsname uname_data;
 	uname(&uname_data);
+	if(strstr(uname_data.release, "n306c")) {
+		device_variant = "n306c";
+	}
+
 	char * kernel_version = NULL;
 	// Pass 0 to snprintf to let it tell us how large of a buffer we need
 	int size = snprintf(kernel_version, 0U, "%s %s %s", uname_data.sysname, uname_data.nodename, uname_data.version);
@@ -332,10 +336,19 @@ int main(void) {
 		info("Device is not rooted; enforcing security policy", INFO_OK);
 	}
 
+	if(MATCH(device, "n306")) {
+		if(MATCH(device_variant, "n306c")) {
+			button_input_device = "/dev/input/event2";
+		}
+	}
+	else {
+		button_input_device = "/dev/input/event0";
+	}
+
 	bool power_button_pressed = false;
 	bool other_button_pressed = false;
 	// Allow 3 seconds for power button input (boot mode & DFL mode)
-	int fd = open(BUTTON_INPUT_DEVICE, O_RDONLY | O_NONBLOCK);
+	int fd = open(button_input_device, O_RDONLY | O_NONBLOCK);
 	if (fd == -1) {
 		perror("open");
 		exit(EXIT_FAILURE);
@@ -947,7 +960,7 @@ void launch_dfl(void) {
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
-	if(MATCH(device, "n306") || MATCH(device, "n873")) {
+	if((MATCH(device, "n306") && NOT_MATCH(device_variant, "n306c")) || MATCH(device, "n873")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/usb_f_mass_storage.ko", "");
@@ -1014,17 +1027,19 @@ void setup_usbnet(void) {
 		load_module("/modules/g_ether.ko", options);
 	}
 	else if(MATCH(device, "n306") || MATCH(device, "n249") || MATCH(device, "n873") || MATCH(device, "bpi")) {
-		load_module("/modules/fs/configfs/configfs.ko", "");
-		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
-		load_module("/modules/drivers/usb/gadget/function/u_ether.ko", "");
-		load_module("/modules/drivers/usb/gadget/function/usb_f_ecm.ko", "");
-		if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_eem.ko")) {
-			load_module("/modules/drivers/usb/gadget/function/usb_f_eem.ko", "");
+		if(NOT_MATCH(device_variant, "n306c")) {
+			load_module("/modules/fs/configfs/configfs.ko", "");
+			load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
+			load_module("/modules/drivers/usb/gadget/function/u_ether.ko", "");
+			load_module("/modules/drivers/usb/gadget/function/usb_f_ecm.ko", "");
+			if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_eem.ko")) {
+				load_module("/modules/drivers/usb/gadget/function/usb_f_eem.ko", "");
+			}
+			if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko")) {
+				load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
+			}
+			load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
 		}
-		if(FILE_EXISTS("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko")) {
-			load_module("/modules/drivers/usb/gadget/function/usb_f_ecm_subset.ko", "");
-		}
-		load_module("/modules/drivers/usb/gadget/function/usb_f_rndis.ko", "");
 		load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", options);
 	}
 	else if(MATCH(device, "kt")) {
