@@ -340,6 +340,9 @@ int main(void) {
 		if(MATCH(device_variant, "n306c")) {
 			button_input_device = "/dev/input/event2";
 		}
+		else {
+			button_input_device = "/dev/input/event0";
+		}
 	}
 	else {
 		button_input_device = "/dev/input/event0";
@@ -956,11 +959,14 @@ void launch_dfl(void) {
 	mkpath("/modules", 0755);
 	REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
+	if(MATCH(device, "n249")) {
+		MOUNT("/modules/5.16.0/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
+	}
 
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
 	}
-	if((MATCH(device, "n306") && NOT_MATCH(device_variant, "n306c")) || MATCH(device, "n873")) {
+	if((MATCH(device, "n306") && NOT_MATCH(device_variant, "n306c")) || MATCH(device, "n249") ||  MATCH(device, "n873")) {
 		load_module("/modules/fs/configfs/configfs.ko", "");
 		load_module("/modules/drivers/usb/gadget/libcomposite.ko", "");
 		load_module("/modules/drivers/usb/gadget/function/usb_f_mass_storage.ko", "");
