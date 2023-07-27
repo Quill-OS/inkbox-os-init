@@ -120,14 +120,14 @@ int main(void) {
 	usbnet_host_address = read_file("/mnt/flags/USBNET_HOST_ADDRESS", true);
 	usbnet_ip = read_file("/mnt/flags/USBNET_IP", true);
 
-	// MOUNT_RW
-	char * mount_rw = read_file("/mnt/flags/MOUNT_RW", true);
-	bool is_mount_rw = false;
-	if(MATCH(mount_rw, "true")) {
-		is_mount_rw = true;
+	// RW_ROOTFS
+	char * rw_rootfs = read_file("/mnt/flags/RW_ROOTFS", true);
+	bool is_rw_rootfs = false;
+	if(MATCH(rw_rootfs, "true")) {
+		is_rw_rootfs = true;
 	}
-	free(mount_rw);
-	mount_rw = NULL;
+	free(rw_rootfs);
+	rw_rootfs = NULL;
 
 	// LOGIN_SHELL
 	char * login_shell = read_file("/mnt/flags/LOGIN_SHELL", true);
@@ -490,7 +490,7 @@ int main(void) {
 		}
 
 		// Mounting root filesystem
-		if(is_mount_rw) {
+		if(is_rw_rootfs) {
 			// Mounting read-write
 			long int exit_code = REAP("/etc/init.d/overlay-mount", "rw");
 			if(exit_code != 0) {
