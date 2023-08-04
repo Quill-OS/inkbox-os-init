@@ -351,49 +351,112 @@ int main(void) {
 	bool power_button_pressed = false;
 	bool other_button_pressed = false;
 	// Allow 3 seconds for power button input (boot mode & DFL mode)
-	int fd = open(button_input_device, O_RDONLY | O_NONBLOCK);
-	if (fd == -1) {
-		perror("open");
-		exit(EXIT_FAILURE);
-	}
-
-	fd_set rfds;
-	FD_ZERO(&rfds);
-	FD_SET(fd, &rfds);
-	struct timeval tv;
-	tv.tv_sec = 3;
-	tv.tv_usec = 0;
-
-	while(true) {
-		/*
-		 * Linux modifies tv to reflect the amount of time not slept (i.e., the amount of time left in the timeout),
-		 * we rely on that to only loop for 3s max without having to compute anything ourselves.
-		*/
-		int rv = select(fd + 1, &rfds, NULL, NULL, &tv);
-
-		if(rv == -1 && errno != EINTR) {
-			perror("select");
+	if(NOT_MATCH(device, "kt")) {
+		int fd = open(button_input_device, O_RDONLY | O_NONBLOCK);
+		if (fd == -1) {
+			perror("open");
 			exit(EXIT_FAILURE);
 		}
-		else if(rv) {
-			struct input_event ev;
-			if(read(fd, &ev, sizeof(ev)) == sizeof(ev)) {
-				if(ev.code == KEY_POWER && ev.value == 1) {
-					power_button_pressed = true;
-				}
-				// KEY_KATAKANA represents the brightness button on the Glo (N613)
-				else if((ev.code == KEY_HOME || ev.code == KEY_KATAKANA) && ev.value == 1) {
-					other_button_pressed = true;
+
+		fd_set rfds;
+		FD_ZERO(&rfds);
+		FD_SET(fd, &rfds);
+		struct timeval tv;
+		tv.tv_sec = 3;
+		tv.tv_usec = 0;
+
+		while(true) {
+			/*
+			 * Linux modifies tv to reflect the amount of time not slept (i.e., the amount of time left in the timeout),
+			 * we rely on that to only loop for 3s max without having to compute anything ourselves.
+			*/
+			int rv = select(fd + 1, &rfds, NULL, NULL, &tv);
+
+			if(rv == -1 && errno != EINTR) {
+				perror("select");
+				exit(EXIT_FAILURE);
+			}
+			else if(rv) {
+				struct input_event ev;
+				if(read(fd, &ev, sizeof(ev)) == sizeof(ev)) {
+					if(ev.code == KEY_POWER && ev.value == 1) {
+						power_button_pressed = true;
+					}
+					// KEY_KATAKANA represents the brightness button on the Glo (N613)
+					else if((ev.code == KEY_HOME || ev.code == KEY_KATAKANA) && ev.value == 1) {
+						other_button_pressed = true;
+					}
 				}
 			}
+			else {
+				// Timeout
+				break;
+			}
 		}
-		else {
-			// Timeout
-			break;
-		}
-	}
 
-	close(fd);
+		close(fd);
+	}
+	else {
+		// Kindle Touch's way of detecting a power button input
+		struct sockaddr_nl src_addr, dest_addr;
+		struct nlmsghdr *nlh = NULL;
+		struct msghdr msg;
+		struct iovec iov;
+		int sock_fd;
+
+		// Changed LJ article example to use NETLINK_KOBJECT_UEVENT
+		sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_KOBJECT_UEVENT);
+
+		memset(&src_addr, 0, sizeof(src_addr));
+		src_addr.nl_family = AF_NETLINK;
+		src_addr.nl_pid = getpid(); // Self PID
+		src_addr.nl_groups = 1;     // Interested in group 1<<0
+
+		bind(sock_fd, (struct sockaddr*)&src_addr, sizeof(src_addr));
+
+		memset(&dest_addr, 0, sizeof(dest_addr));
+
+		nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(1024));
+		memset(nlh, 0, NLMSG_SPACE(1024));
+
+		iov.iov_base = (void *)nlh;
+		iov.iov_len = NLMSG_SPACE(1024);
+		msg.msg_name = (void *)&dest_addr;
+		msg.msg_namelen = sizeof(dest_addr);
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+
+		printf("Waiting for message from kernel\n");
+
+		// Set timeout using select | Thank ChatGPT for this
+		fd_set fds;
+		FD_ZERO(&fds);
+		FD_SET(sock_fd, &fds);
+
+		struct timeval timeout;
+		timeout.tv_sec = 3;
+		timeout.tv_usec = 0;
+
+		int retval = select(sock_fd + 1, &fds, NULL, NULL, &timeout);
+
+		if (retval == -1) {
+			perror("select");
+			close(sock_fd);
+		}
+		else if (retval == 0) {
+			// Timeout occurred
+			close(sock_fd);
+		}
+
+		// Read message from kernel
+		recvmsg(sock_fd, &msg, 0);
+
+		if(MATCH(NLMSG_DATA(nlh), "virtual/misc/yoshibutton")) {
+			power_button_pressed = true;
+		}
+
+		close(sock_fd);
+	}
 
 	// Mounting boot flags partition
 	MOUNT("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");

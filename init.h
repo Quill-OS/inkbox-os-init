@@ -24,6 +24,7 @@
 #include <sys/utsname.h>
 #include <linux/limits.h>
 #include <linux/input.h>
+#include <linux/netlink.h>
 #include <net/if.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
