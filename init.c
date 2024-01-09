@@ -182,7 +182,7 @@ int main(void) {
 	// Kernel Git commit
 	char * kernel_git_commit = read_file("/opt/commit", true);
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
-	printf("Copyright (C) 2021-2023 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
+	printf("Copyright (C) 2021-2024 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
 	free(kernel_git_commit);
 	kernel_git_commit = NULL;
 	free(kernel_build_id);
@@ -1215,7 +1215,7 @@ void mount_squashfs_archives(void) {
 	MOUNT("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
 	// Make insmod and modprobe coexist with already existing shell scripts
 	if(MATCH(device, "n249")) {
-		MOUNT("/mnt/lib/modules/5.16.0/kernel/", "/mnt/lib/modules", "", MS_BIND | MS_REC, "");
 		MOUNT("/lib/modules/5.16.0/", "/mnt/lib/modules/5.16.0/", "", MS_BIND | MS_REC, "");
+		MOUNT("/mnt/lib/modules/5.16.0/kernel/", "/mnt/lib/modules", "", MS_BIND | MS_REC, "");
 	}
 }
