@@ -43,12 +43,12 @@ int main(void) {
 		REAP("/usr/bin/unsquashfs", "-d", "/lib/firmware/imx/epdc", "/opt/firmware.sqsh");
 
 		// Load some modules
-		load_module("/lib/modules/5.16.0/kernel/drivers/power/supply/rn5t618_power.ko", "");
-		load_module("/lib/modules/5.16.0/kernel/drivers/hwmon/tps6518x-hwmon.ko", "");
-		load_module("/lib/modules/5.16.0/kernel/drivers/regulator/tps6518x-regulator.ko", "");
-		load_module("/lib/modules/5.16.0/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
-		load_module("/lib/modules/5.16.0/kernel/drivers/video/backlight/lm3630a_bl.ko", "");
-		load_module("/lib/modules/5.16.0/kernel/drivers/rtc/rtc-rc5t619.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/power/supply/rn5t618_power.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/hwmon/tps6518x-hwmon.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/regulator/tps6518x-regulator.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/video/fbdev/mxc/mxc_epdc_v2_fb.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/video/backlight/lm3630a_bl.ko", "");
+		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/rtc/rtc-rc5t619.ko", "");
 
 		// Input device node hackery
 		rename("/dev/input/event0", "/dev/input/.event1");
@@ -1023,7 +1023,7 @@ void launch_dfl(void) {
 	REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
 	if(MATCH(device, "n249")) {
-		MOUNT("/modules/5.16.0/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
+		MOUNT("/modules/5.16.0-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
 	}
 
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613")) {
@@ -1076,7 +1076,7 @@ void setup_usbnet(void) {
 	REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
 	if(MATCH(device, "n249")) {
-		MOUNT("/modules/5.16.0/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
+		MOUNT("/modules/5.16.0-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
 	}
 
 	if(!(usbnet_device_address && *usbnet_device_address)) {
@@ -1215,7 +1215,7 @@ void mount_squashfs_archives(void) {
 	MOUNT("/dev/loop5", "/mnt/lib/modules", "squashfs", MS_NODEV | MS_NOSUID | MS_NOEXEC, "");
 	// Make insmod and modprobe coexist with already existing shell scripts
 	if(MATCH(device, "n249")) {
-		MOUNT("/lib/modules/5.16.0/", "/mnt/lib/modules/5.16.0/", "", MS_BIND | MS_REC, "");
-		MOUNT("/mnt/lib/modules/5.16.0/kernel/", "/mnt/lib/modules", "", MS_BIND | MS_REC, "");
+		MOUNT("/mnt/lib/modules/5.16.0-inkbox/kernel/", "/mnt/lib/modules", "", MS_BIND | MS_REC, "");
+		MOUNT("/lib/modules/5.16.0-inkbox/", "/mnt/lib/modules/5.16.0-inkbox/", "", MS_BIND | MS_REC, "");
 	}
 }
