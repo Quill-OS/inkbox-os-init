@@ -51,9 +51,12 @@ int main(void) {
 		load_module("/lib/modules/5.16.0-inkbox/kernel/drivers/rtc/rtc-rc5t619.ko", "");
 
 		// Input device node hackery
-		rename("/dev/input/event0", "/dev/input/.event1");
-		rename("/dev/input/event1", "/dev/input/event0");
-		rename("/dev/input/.event1", "/dev/input/event1");
+		// rename("/dev/input/event0", "/dev/input/.event1");
+		// rename("/dev/input/event1", "/dev/input/event0");
+		// rename("/dev/input/.event1", "/dev/input/event1");
+		// This is a great example of what not to do, ever.
+		// If something doesn't work, go look up the issue and don't create code that works but is hacky so it soon won't work
+		// IPD should just use by-path and not directly that
 
 		// Initial screen refresh
 		// Leaving this for later; strangely, this causes the Clara HD's display to shift vertically; go find out why
