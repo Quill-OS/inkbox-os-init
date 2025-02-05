@@ -1028,6 +1028,9 @@ void launch_dfl(void) {
 	if(MATCH(device, "n249")) {
 		MOUNT("/modules/5.16.0-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
 	}
+	if(MATCH(device, "n418")) {
+		MOUNT("/modules/4.1.15-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, "");
+	}
 
 	if(MATCH(device, "n705") || MATCH(device, "n905b") || MATCH(device, "n905c") || MATCH(device, "n613")) {
 		load_module("/modules/arcotg_udc.ko", "");
@@ -1080,6 +1083,9 @@ void setup_usbnet(void) {
 	MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
 	if(MATCH(device, "n249")) {
 		MOUNT("/modules/5.16.0-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, ""); // ;)
+	}
+	if(MATCH(device, "n418")) {
+		MOUNT("/modules/4.1.15-inkbox/kernel", "/modules", "", MS_BIND | MS_REC, "");
 	}
 
 	if(!(usbnet_device_address && *usbnet_device_address)) {
