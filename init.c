@@ -100,6 +100,7 @@ int main(void) {
 
 	// USB boot
 	if(access("/dev/mmcblk0", F_OK) != 0) {
+		info("MMC/eMMC not found: attempting USB network boot", INFO_OK);
 		setup_usbnet();
 		REAP("/bin/sh", "/etc/init.d/usb-boot");
 	}
