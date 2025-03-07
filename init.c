@@ -98,6 +98,12 @@ int main(void) {
 	// Setting loopack interface UP
 	set_if_up("lo");
 
+	// USB boot
+	if(access("/dev/mmcblk0", F_OK) != 0) {
+		setup_usbnet();
+		REAP("/bin/sh", "/etc/init.d/usb-boot");
+	}
+
 	// Setting up boot flags partition (P1)
 	MOUNT("/dev/mmcblk0p1", "/mnt", "ext4", 0, "");
 	mkpath("/mnt/flags", 0755);
