@@ -98,9 +98,10 @@ int main(void) {
 	// Setting loopack interface UP
 	set_if_up("lo");
 
-	// USB boot
+	// USB network boot
 	if(access("/dev/mmcblk0", F_OK) != 0) {
 		info("MMC/eMMC not found: attempting USB network boot", INFO_OK);
+		REAP("/etc/init.d/inkbox-splash", "netboot");
 		setup_usbnet();
 		REAP("/bin/sh", "/etc/init.d/usb-boot");
 	}
