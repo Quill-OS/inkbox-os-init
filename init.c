@@ -1140,6 +1140,9 @@ void setup_usbnet(void) {
 	}
 
 	// Unmount modules
+	if(MATCH(device, "n249") || MATCH(device, "n418")) {
+		umount("/modules");
+	}
 	umount("/modules");
 	REAP("/sbin/losetup", "-d", "/dev/loop0");
 
