@@ -193,7 +193,7 @@ int main(void) {
 	// Kernel Git commit
 	char * kernel_git_commit = read_file("/opt/commit", true);
 	printf("\n%s GNU/Linux\nInkBox OS, kernel build %s, commit %s\n\n", kernel_version, kernel_build_id, kernel_git_commit);
-	printf("Copyright (C) 2021-2025 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
+	printf("Copyright (C) 2021-2026 Nicolas Mailloux <nicolecrivain@gmail.com>\n");
 	free(kernel_git_commit);
 	kernel_git_commit = NULL;
 	free(kernel_build_id);
