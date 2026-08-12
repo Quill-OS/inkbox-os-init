@@ -25,18 +25,29 @@ int main(void) {
 
     if (MATCH(device, "n367") || MATCH(device, "n428")) {
         sprintf(baudrate, "921600");
+        sprintf(modules_mount_path, "/lib/modules");
     } else {
         sprintf(baudrate, "115200");
+        sprintf(modules_mount_path, "/modules");
     }
 
-    int boot_part;
+    int part_nums[PART_COUNT] = {[BOOT_PART] = 1,
+                                 [RECOVERY_PART] = 2,
+                                 [ROOTFS_PART] = 3,
+                                 [USERDATA_PART] = 4};
     if (MATCH(device, "n367") || MATCH(device, "n428")) {
-        boot_part = 10;
-    } else {
-        boot_part = 1;
+        part_nums[BOOT_PART] = 10;
+        part_nums[RECOVERY_PART] = 11;
+        part_nums[ROOTFS_PART] = 12;
+        part_nums[USERDATA_PART] = 13;
+    } else if (MATCH(device, "n873")) {
+        part_nums[RECOVERY_PART] = 5;
     }
-    snprintf(boot_part_path, sizeof(boot_part_path), "/dev/mmcblk0p%d",
-             boot_part);
+
+    for (int i = 0; i < PART_COUNT; i++) {
+        snprintf(partition_paths[i], sizeof(partition_paths[i]),
+                 "/dev/mmcblk0p%d", part_nums[i]);
+    }
 
     // Filesystems
     MOUNT("proc", "/proc", "proc", MS_NOSUID, "");
@@ -110,7 +121,7 @@ int main(void) {
             "eink_fb_waveform.ko",
             "");
         // Mounting P1 of MMC to retrieve FB waveform
-        MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+        MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
         // Check if waveform data exists
         // mxc_epdc_fb
         if (FILE_EXISTS("/mnt/waveform/waveform.wbf") &&
@@ -146,12 +157,12 @@ int main(void) {
     if (access("/dev/mmcblk0", F_OK) != 0) {
         info("MMC/eMMC not found: attempting USB network boot", INFO_OK);
         REAP("/etc/init.d/inkbox-splash", "netboot");
-        setup_usbnet();
+        setup_usbnet(false);
         REAP("/bin/sh", "/etc/init.d/usb-boot");
     }
 
     // Setting up boot flags partition (P1)
-    MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+    MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
     mkpath("/mnt/flags", 0755);
 
     // Handling DISPLAY_DEBUG flag
@@ -254,31 +265,13 @@ int main(void) {
     // Unmounting P1 for inspection by fsck.ext4
     umount("/mnt");
     printf("\n");
-    // P1
-    REAP("/usr/bin/fsck.ext4", "-y", boot_part_path);
-    // P2
-    if (MATCH(device, "n873")) {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p5");
-    } else if (MATCH(device, "n367") || MATCH(device, "n428")) {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p11");
-    } else {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p2");
-    }
-    // P3
-    if (MATCH(device, "n367") || MATCH(device, "n428")) {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p12");
-    } else {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p3");
-    }
-    // P4
-    if (MATCH(device, "n367") || MATCH(device, "n428")) {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p13");
-    } else {
-        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p4");
-    }
+    REAP("/usr/bin/fsck.ext4", "-y", partition_paths[BOOT_PART]);
+    REAP("/usr/bin/fsck.ext4", "-y", partition_paths[RECOVERY_PART]);
+    REAP("/usr/bin/fsck.ext4", "-y", partition_paths[ROOTFS_PART]);
+    REAP("/usr/bin/fsck.ext4", "-y", partition_paths[USERDATA_PART]);
     printf("\n");
     // Remounting P1
-    MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+    MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
 
     // Universal ID check
     REAP("/opt/bin/uidgen");
@@ -393,7 +386,7 @@ int main(void) {
     } else {
         root = false;
         if (root_mmc || root_initrd) {
-            MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+            MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
             write_file("/mnt/flags/DONT_BOOT", "true\n");
             sync();
             umount("/mnt");
@@ -529,7 +522,7 @@ int main(void) {
     }
 
     // Mounting boot flags partition
-    MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+    MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
 
     // DFL mode
     if (root) {
@@ -596,7 +589,7 @@ int main(void) {
         // Checking whether we need to show an update splash or not
         if (!is_display_debug) {
             // WILL_UPDATE flag
-            MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
+            MOUNT(partition_paths[BOOT_PART], "/mnt", "ext4", 0, "");
             char* will_update = read_file("/mnt/flags/WILL_UPDATE", true);
             umount("/mnt");
 
@@ -644,7 +637,7 @@ int main(void) {
         progress_sleep();
 
         // Mounting P1 in root filesystem
-        MOUNT(boot_part_path, "/mnt/boot", "ext4", 0, "");
+        MOUNT(partition_paths[BOOT_PART], "/mnt/boot", "ext4", 0, "");
         MOUNT("tmpfs", "/mnt/root", "tmpfs", 0, "size=8M");
 
         // Handling LOGIN_SHELL
@@ -706,7 +699,7 @@ int main(void) {
         }
         MOUNT("/tmp/passwd", "/mnt/etc/passwd", "", MS_BIND, "");
         // User storage
-        MOUNT("/dev/mmcblk0p4", "/mnt/opt/storage", "ext4", 0, "");
+        MOUNT(partition_paths[USERDATA_PART], "/mnt/opt/storage", "ext4", 0, "");
         // Configuration files
         mkpath("/mnt/opt/storage/config", 0755);
         MOUNT("/mnt/opt/storage/config", "/mnt/opt/config", "", MS_BIND, "");
@@ -839,7 +832,7 @@ int main(void) {
         }
         info("Mounted base recovery filesystem", INFO_OK);
         // Mounting boot flags partition
-        MOUNT(boot_part_path, "/mnt/boot", "ext4", 0, "");
+        MOUNT(partition_paths[BOOT_PART], "/mnt/boot", "ext4", 0, "");
         // Essential filesystems
         mount_essential_filesystems();
         info("Mounted essential filesystems", INFO_OK);
@@ -1174,12 +1167,12 @@ void setup_usb_debug(bool boot) {
     // Telnet server
     RUN("/bin/busybox", "telnetd");
     // FTP server
-    RUN("/bin/busybox", "tcpsvd", "-vE", "0.0.0.0", "21", "ftpd", "-A", "-w",
+    RUN("/bin/busybox", "tcpsvd", "-vE", "0.0.0.0", "21", "/usr/sbin/ftpd", "-A", "-w",
         "/");
 
     if (boot) {
         // Set up USB networking interface
-        setup_usbnet();
+        setup_usbnet(true);
         // Splash time
         REAP("/etc/init.d/inkbox-splash",
              "usb_debug"); // FIXME: Why does this one waits and collects?
@@ -1193,11 +1186,11 @@ void setup_usb_debug(bool boot) {
     }
 }
 
-void setup_usbnet(void) {
+void setup_usbnet(bool setup_dhcpd) {
     // Load modules
-    mkpath("/modules", 0755);
+    mkpath(modules_mount_path, 0755);
     REAP("/sbin/losetup", "/dev/loop0", "/opt/modules.sqsh");
-    MOUNT("/dev/loop0", "/modules", "squashfs", 0, "");
+    MOUNT("/dev/loop0", modules_mount_path, "squashfs", 0, "");
     if (MATCH(device, "n249")) {
         MOUNT("/modules/5.16.0-inkbox/kernel", "/modules", "", MS_BIND | MS_REC,
               ""); // ;)
@@ -1249,6 +1242,8 @@ void setup_usbnet(void) {
                         "");
         }
         load_module("/modules/drivers/usb/gadget/legacy/g_ether.ko", options);
+    } else if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        REAP("/sbin/modprobe", "g_ether", options);
     } else if (MATCH(device, "kt")) {
         load_module(
             "/modules/2.6.35-inkbox/kernel/drivers/usb/gadget/arcotg_udc.ko",
@@ -1278,6 +1273,10 @@ void setup_usbnet(void) {
         }
     } else {
         set_if_ip_address("usb0", "192.168.2.2");
+    }
+
+    if (setup_dhcpd) {
+        REAP("/bin/sh", "/etc/init.d/usb-boot", "dhcpd_only");
     }
 }
 
