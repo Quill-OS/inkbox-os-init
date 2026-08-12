@@ -23,8 +23,13 @@ int main(void) {
         strcpy(tty, "ttymxc0");
     }
 
+    if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        sprintf(baudrate, "921600");
+    } else {
+        sprintf(baudrate, "115200");
+    }
+
     int boot_part;
-    char boot_part_path[32];
     if (MATCH(device, "n367") || MATCH(device, "n428")) {
         boot_part = 10;
     } else {
@@ -247,13 +252,23 @@ int main(void) {
     // P2
     if (MATCH(device, "n873")) {
         REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p5");
+    } else if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p11");
     } else {
         REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p2");
     }
     // P3
-    REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p3");
+    if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p12");
+    } else {
+        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p3");
+    }
     // P4
-    REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p4");
+    if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p13");
+    } else {
+        REAP("/usr/bin/fsck.ext4", "-y", "/dev/mmcblk0p4");
+    }
     printf("\n");
     // Remounting P1
     MOUNT(boot_part_path, "/mnt", "ext4", 0, "");
@@ -343,6 +358,9 @@ int main(void) {
     if (MATCH(device, "kt")) {
         read_sector(mmc_root_flag, sizeof(mmc_root_flag), "/dev/mmcblk0",
                     ROOT_FLAG_SECTOR_KT, 512);
+    } else if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        read_sector(mmc_root_flag, sizeof(mmc_root_flag), "/dev/mmcblk0",
+                    ROOT_FLAG_SECTOR_MTK, 512);
     } else {
         read_sector(mmc_root_flag, sizeof(mmc_root_flag), "/dev/mmcblk0",
                     ROOT_FLAG_SECTOR, 512);
@@ -830,7 +848,7 @@ int main(void) {
     // Start getty in chroot
     while (true) {
         REAP("/bin/busybox", "chroot", "/mnt", "/sbin/getty", "-L", tty,
-             "115200", "linux");
+             baudrate, "linux");
     }
 }
 
@@ -1258,7 +1276,7 @@ void setup_usbnet(void) {
 
 void setup_shell(void) {
     // Starting getty in init ramdisk root
-    REAP("/sbin/getty", "-L", tty, "115200", "linux");
+    REAP("/sbin/getty", "-L", tty, baudrate, "linux");
 
     while (true) {
         sleep(-1U);

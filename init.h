@@ -57,6 +57,7 @@
 #define INFO_FATAL 2
 #define ROOT_FLAG_SECTOR 79872
 #define ROOT_FLAG_SECTOR_KT 98304
+#define ROOT_FLAG_SECTOR_MTK 792576
 #define ROOT_FLAG_SIZE 6U
 #define BOOT_STANDARD 0
 #define BOOT_DIAGNOSTICS 1
@@ -68,6 +69,8 @@ char * device = NULL;
 char * device_variant = NULL;
 char * button_input_device = NULL;
 char tty[8] = { 0 };
+char boot_part_path[32] = { 0 };
+char baudrate[7] = { 0 };
 char * usbnet_ip;
 char * usbnet_device_address;
 char * usbnet_host_address;
