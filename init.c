@@ -47,6 +47,13 @@ int main(void) {
     MOUNT("devtmpfs", "/dev", "devtmpfs", 0, "");
     MOUNT("tmpfs", "/tmp", "tmpfs", 0, "size=16M");
 
+    // Put waveforms files at the place expected by the driver
+    if (MATCH(device, "n367") || MATCH(device, "n428")) {
+        mkpath("/data/init_bin", 0755);
+        MOUNT("/dev/mmcblk0p8", "/data/init_bin", "ext4",
+              MS_RDONLY | MS_RELATIME, "");
+    }
+
     // Kobo Clara HD (N249) handling
     if (MATCH(device, "n249")) {
         // Unsquashing modules
